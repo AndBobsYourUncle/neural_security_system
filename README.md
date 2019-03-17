@@ -6,10 +6,29 @@ The goal of this tool is to allow monitoring of a security camera, and to active
 
 # Instructions for Building
 
-1. Download and install the OpenVINO toolkit: [https://software.intel.com/en-us/articles/OpenVINO-Install-Linux](https://software.intel.com/en-us/articles/OpenVINO-Install-Linux). This project assumes you have installed the toolkit as a regular user, and not root. When you get to the step to run `sudo ./install_GUI.sh`, run it without `sudo` instead.
-2. After you have installed all the prerequisites, build the sample projects. `cd ~/intel/openvino/deployment_tools/demo`, `./demo_squeezenet_download_convert_run.sh`
-3. Now that you have the sample built, you should be able to copy `libcpu_extension.so` to the `lib/` folder of this repo (just in case the version here is outdated). It's most likely going to be located here: `~/inference_engine_samples/intel64/Release/lib/libcpu_extension.so`
-4. `make`
+* Download and install the OpenVINO toolkit: [https://software.intel.com/en-us/articles/OpenVINO-Install-Linux](https://software.intel.com/en-us/articles/OpenVINO-Install-Linux). This project assumes you have installed the toolkit as a regular user, and not root. When you get to the step to run `sudo ./install_GUI.sh`, run it without `sudo` instead.
+2. Install paho MQTT library
+
+```bash
+sudo apt-get install libssl-dev
+
+git clone https://github.com/eclipse/paho.mqtt.c.git
+cd paho.mqtt.c/
+git checkout v1.2.1
+cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
+sudo cmake --build build/ --target install
+sudo ldconfig
+
+git clone https://github.com/eclipse/paho.mqtt.cpp
+cd paho.mqtt.cpp/
+cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
+sudo cmake --build build/ --target install
+sudo ldconfig
+```
+
+* After you have installed all the prerequisites, build the sample projects. `cd ~/intel/openvino/deployment_tools/demo`, `./demo_squeezenet_download_convert_run.sh`
+* Now that you have the sample built, you should be able to copy `libcpu_extension.so` to the `lib/` folder of this repo (just in case the version here is outdated). It's most likely going to be located here: `~/inference_engine_samples/intel64/Release/lib/libcpu_extension.so`
+* `make -B`
 
 # Using
 
