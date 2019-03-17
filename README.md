@@ -69,30 +69,15 @@ Options:
 
 Running the application with the empty list of options yields the usage message given above and an error message.
 You can use the following command to do inference on GPU with a pre-trained object detection model:
-### CPU + USB Camera Mode + Full size YoloV3 (Selectable cam0/cam1/cam2)
+### My Example Usage (MMJPEG security camera) w/ CPU
 ```bash
 $ cd cpp
-$ ./object_detection_demo_yolov3_async -i cam0 -m ../lrmodels/YoloV3/FP32/frozen_yolo_v3.xml -d CPU
+$ ./neural_security_system -i http://192.168.1.52:8081 -m ./models/tiny_yolov3/FP32/frozen_tiny_yolo_v3.xml -d CPU -t 0.2 -u user -p password -tp cameras/front_door/humans -no_image -mh tcp://192.168.1.51:1883 -cr 150
 ```
-### MYRIAD + USB Camera Mode + Full size YoloV3 (Selectable cam0/cam1/cam2)
+### My Example Usage (MMJPEG security camera) w/ Intel Neural Compute Stick 2
 ```bash
 $ cd cpp
-$ ./object_detection_demo_yolov3_async -i cam0 -m ../lrmodels/tiny-YoloV3/FP16/frozen_tiny_yolo_v3.xml -d MYRIAD
-```
-### CPU + USB Camera Mode + tiny-YoloV3 (Selectable cam0/cam1/cam2)
-```bash
-$ cd cpp
-$ ./object_detection_demo_yolov3_async -i cam0 -m ../lrmodels/tiny-YoloV3/FP16/frozen_yolo_v3.xml -d CPU
-```
-### MYRIAD + USB Camera Mode + tiny-YoloV3 (Selectable cam0/cam1/cam2)
-```bash
-$ cd cpp
-$ ./object_detection_demo_yolov3_async -i cam0 -m ../lrmodels/tiny-YoloV3/FP16/frozen_tiny_yolo_v3.xml -d MYRIAD -t 0.2
-```
-### Movie File Mode
-```bash
-$ cd cpp
-$ ./object_detection_demo_yolov3_async -i <path_to_video>/inputVideo.mp4 -m <path_to_model>/frozen_yolo_v3.xml -l ../lib/libcpu_extension.so -d CPU
+$ ./neural_security_system -i http://192.168.1.52:8081 -m ./models/tiny_yolov3/FP16/frozen_tiny_yolo_v3.xml -d MYRIAD -t 0.2 -u user -p password -tp cameras/front_door/humans -no_image -mh tcp://192.168.1.51:1883 -cr 150
 ```
 **NOTE**: Public models should be first converted to the Inference Engine format (`*.xml` + `*.bin`) using the Model Optimizer tool.
 
