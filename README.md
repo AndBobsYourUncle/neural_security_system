@@ -21,7 +21,7 @@ InferenceEngine:
     API version ............ <version>
     Build .................. <number>
 
-object_detection_demo_yolov3_async [OPTION]
+neural_security_system [OPTION]
 Options:
 
     -h                        Print a usage message.

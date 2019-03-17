@@ -100,7 +100,7 @@ DEFINE_bool(auto_resize, false, input_resizable_message);
 */
 static void showUsage() {
     std::cout << std::endl;
-    std::cout << "object_detection_demo_yolov3_async [OPTION]" << std::endl;
+    std::cout << "neural_security_system [OPTION]" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << std::endl;
     std::cout << "    -h                        " << help_message << std::endl;
