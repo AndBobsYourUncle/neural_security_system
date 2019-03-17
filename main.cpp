@@ -37,6 +37,18 @@
 #include <ctime>
 #include "mqtt/async_client.h"
 
+// #include <ncurses.h>
+// #include <unistd.h>  /* only for sleep() */
+#include <sys/time.h>
+#include <sys/types.h>
+#include <unistd.h>
+
+#include <sstream>
+#include <stdio.h>
+#include <string.h>
+#include <termios.h>
+
+
 using namespace std::chrono;
 
 using namespace std;
@@ -44,8 +56,6 @@ using namespace cv;
 using namespace InferenceEngine::details;
 using namespace InferenceEngine;
 
-
-const std::string DFLT_ADDRESS { "tcp://192.168.1.51:1883" };
 
 const int    QOS = 1;
 
@@ -75,6 +85,10 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
 
     if (FLAGS_m.empty()) {
         throw std::logic_error("Parameter -m is not set");
+    }
+
+    if (FLAGS_mh.empty()) {
+        throw std::logic_error("Parameter -mh is not set");
     }
 
     if (FLAGS_u.empty()) {
@@ -236,13 +250,25 @@ void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const un
     }
 }
 
+// int kbhit(void)
+// {
+//     int ch = getch();
+
+//     if (ch != ERR) {
+//         ungetch(ch);
+//         return 1;
+//     } else {
+//         return 0;
+//     }
+// }
+
 int main(int argc, char *argv[]) {
     // ------------------------------ Parsing and validating the input arguments ---------------------------------
     if (!ParseAndCheckCommandLine(argc, argv)) {
         return 0;
     }
 
-    string address = DFLT_ADDRESS; //(argc > 1) ? string(argv[1]) : DFLT_ADDRESS;
+    string address = FLAGS_mh;
 
     mqtt::async_client cli(address, "", MAX_BUFFERED_MSGS, PERSIST_DIR);
 
@@ -264,6 +290,28 @@ int main(int argc, char *argv[]) {
     random_device rnd;
     mt19937 gen(rnd());
     uniform_int_distribution<> dis(0, 100);
+
+    // initscr();
+
+    // cbreak();
+    // noecho();
+    // nodelay(stdscr, TRUE);
+
+    // scrollok(stdscr, TRUE);
+
+    char a;
+    stringstream ss;
+    string s;
+    string s2;
+    int i;
+    const char * cs;
+
+    // Here I attempt to set stdin to unbuffered, read directly from the keyboard.
+
+    struct termios term;
+    tcgetattr(STDIN_FILENO, &term);
+    term.c_lflag &= ~ICANON;
+    tcsetattr(STDIN_FILENO, TCSANOW, &term);
 
     try {
         // Connect to the MQTT broker
@@ -527,7 +575,9 @@ int main(int argc, char *argv[]) {
                     }
                 }
             }
-            cv::imshow("Detection results", frame);
+
+            if(!FLAGS_no_image)
+                cv::imshow("Detection results", frame);
 
             if(has_people_in_frame && !humans_detected) {
                 humans_detected = true;
@@ -575,6 +625,12 @@ int main(int argc, char *argv[]) {
             if (9 == key) {  // Tab
                 isAsyncMode ^= true;
                 isModeChanged = true;
+            }
+
+            char kp = getchar();
+            if (kp == 27) {
+                slog::info << "Key press: " << kp << slog::endl;
+                break;
             }
         }
         // -----------------------------------------------------------------------------------------------------
