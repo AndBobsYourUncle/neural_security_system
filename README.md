@@ -71,12 +71,10 @@ Running the application with the empty list of options yields the usage message 
 You can use the following command to do inference on GPU with a pre-trained object detection model:
 ### My Example Usage (MMJPEG security camera) w/ CPU
 ```bash
-$ cd cpp
 $ ./neural_security_system -i http://192.168.1.52:8081 -m ./models/tiny_yolov3/FP32/frozen_tiny_yolo_v3.xml -d CPU -t 0.2 -u user -p password -tp cameras/front_door/humans -no_image -mh tcp://192.168.1.51:1883 -cr 150
 ```
 ### My Example Usage (MMJPEG security camera) w/ Intel Neural Compute Stick 2
 ```bash
-$ cd cpp
 $ ./neural_security_system -i http://192.168.1.52:8081 -m ./models/tiny_yolov3/FP16/frozen_tiny_yolo_v3.xml -d MYRIAD -t 0.2 -u user -p password -tp cameras/front_door/humans -no_image -mh tcp://192.168.1.51:1883 -cr 150
 ```
 **NOTE**: Public models should be first converted to the Inference Engine format (`*.xml` + `*.bin`) using the Model Optimizer tool.
