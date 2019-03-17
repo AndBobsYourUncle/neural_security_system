@@ -16,7 +16,7 @@ The goal of this tool is to allow monitoring of a security camera, and to active
 Running the application with the -h option yields the following usage message:
 
 ```
-./object_detection_demo_yolov3_async -h
+./neural_security_system -h
 InferenceEngine:
     API version ............ <version>
     Build .................. <number>
