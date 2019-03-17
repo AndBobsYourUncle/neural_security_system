@@ -29,10 +29,31 @@
 #include "ocv_common.hpp"
 #include "args_helper.hpp"
 
+#include <random>
+#include <thread>
+#include <iostream>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include "mqtt/async_client.h"
+
+using namespace std::chrono;
+
 using namespace std;
 using namespace cv;
 using namespace InferenceEngine::details;
 using namespace InferenceEngine;
+
+
+const std::string DFLT_ADDRESS { "tcp://192.168.1.51:1883" };
+
+const int    QOS = 1;
+
+const auto PERIOD = seconds(5);
+
+const int MAX_BUFFERED_MSGS = 120;  // 120 * 5sec => 10min off-line buffering
+
+const string PERSIST_DIR { "data-persist" };
 
 
 #define yolo_scale_13 13
@@ -55,6 +76,19 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
     if (FLAGS_m.empty()) {
         throw std::logic_error("Parameter -m is not set");
     }
+
+    if (FLAGS_u.empty()) {
+        throw std::logic_error("Parameter -u is not set");
+    }
+
+    if (FLAGS_p.empty()) {
+        throw std::logic_error("Parameter -p is not set");
+    }
+
+    if (FLAGS_tp.empty()) {
+        throw std::logic_error("Parameter -tp is not set");
+    }
+
     return true;
 }
 
@@ -203,14 +237,42 @@ void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const un
 }
 
 int main(int argc, char *argv[]) {
+    // ------------------------------ Parsing and validating the input arguments ---------------------------------
+    if (!ParseAndCheckCommandLine(argc, argv)) {
+        return 0;
+    }
+
+    string address = DFLT_ADDRESS; //(argc > 1) ? string(argv[1]) : DFLT_ADDRESS;
+
+    mqtt::async_client cli(address, "", MAX_BUFFERED_MSGS, PERSIST_DIR);
+
+    mqtt::connect_options connOpts;
+    connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
+    connOpts.set_clean_session(true);
+    connOpts.set_automatic_reconnect(true);
+
+    std::cout << "MQTT Username: " << FLAGS_d << std::endl;
+
+    connOpts.set_user_name(FLAGS_u);
+    connOpts.set_password(FLAGS_p);
+
+    // Create a topic object. This is a conventience since we will
+    // repeatedly publish messages with the same parameters.
+    mqtt::topic top(cli, FLAGS_tp, QOS, true);
+
+    // Random number generator [0 - 100]
+    random_device rnd;
+    mt19937 gen(rnd());
+    uniform_int_distribution<> dis(0, 100);
+
     try {
+        // Connect to the MQTT broker
+        cout << "Connecting to server '" << address << "'..." << flush;
+        cli.connect(connOpts)->wait();
+        cout << "OK\n" << endl;
+
         /** This demo covers a certain topology and cannot be generalized for any object detection **/
         std::cout << "InferenceEngine: " << GetInferenceEngineVersion() << std::endl;
-
-        // ------------------------------ Parsing and validating the input arguments ---------------------------------
-        if (!ParseAndCheckCommandLine(argc, argv)) {
-            return 0;
-        }
 
         slog::info << "Reading input" << slog::endl;
         cv::VideoCapture cap;
@@ -341,6 +403,9 @@ int main(int argc, char *argv[]) {
         auto wallclock = std::chrono::high_resolution_clock::now();
         double ocv_decode_time = 0, ocv_render_time = 0;
 
+        auto time_humans_detected = std::chrono::high_resolution_clock::now();
+        bool humans_detected = false;
+
         while (true) {
             auto t0 = std::chrono::high_resolution_clock::now();
             // Here is the first asynchronous point:
@@ -380,6 +445,8 @@ int main(int argc, char *argv[]) {
             } else if (!isModeChanged) {
                 async_infer_request_curr->StartAsync();
             }
+
+            bool has_people_in_frame = false;
 
             if (OK == async_infer_request_curr->Wait(IInferRequest::WaitMode::RESULT_READY)) {
                 t1 = std::chrono::high_resolution_clock::now();
@@ -446,6 +513,9 @@ int main(int argc, char *argv[]) {
                     }
                     //slog::info << "confidence = " + std::to_string(confidence) << slog::endl;
                     if (confidence > FLAGS_t) {
+                        if(labels[label] == std::string("person"))
+                            has_people_in_frame = true;
+
                         /** Drawing only objects when >confidence_threshold probability **/
                         std::ostringstream conf;
                         conf << ":" << std::fixed << std::setprecision(3) << confidence;
@@ -458,6 +528,26 @@ int main(int argc, char *argv[]) {
                 }
             }
             cv::imshow("Detection results", frame);
+
+            if(has_people_in_frame && !humans_detected) {
+                humans_detected = true;
+                top.publish(std::move("ON"));
+            }
+
+            if(has_people_in_frame) {
+                time_humans_detected = std::chrono::high_resolution_clock::now();
+            }
+
+            if(!has_people_in_frame && humans_detected) {
+                auto time_no_humans = std::chrono::high_resolution_clock::now();
+
+                ms time_since_humans = std::chrono::duration_cast<ms>(time_no_humans - time_humans_detected);
+
+                if(time_since_humans.count() > (FLAGS_to * 1000)) {
+                    humans_detected = false;
+                    top.publish(std::move("OFF"));
+                }
+            }
 
             t1 = std::chrono::high_resolution_clock::now();
             ocv_render_time = std::chrono::duration_cast<ms>(t1 - t0).count();
@@ -488,17 +578,26 @@ int main(int argc, char *argv[]) {
             }
         }
         // -----------------------------------------------------------------------------------------------------
-        auto total_t1 = std::chrono::high_resolution_clock::now();
-        ms total = std::chrono::duration_cast<ms>(total_t1 - total_t0);
-        std::cout << "Total Inference time: " << total.count() << std::endl;
+        // auto total_t1 = std::chrono::high_resolution_clock::now();
+        // ms total = std::chrono::duration_cast<ms>(total_t1 - total_t0);
+        // std::cout << "Total Inference time: " << total.count() << std::endl;
 
         /** Showing performace results **/
         if (FLAGS_pc) {
             printPerformanceCounts(*async_infer_request_curr, std::cout);
         }
+
+        // Disconnect
+        cout << "\nDisconnecting..." << flush;
+        cli.disconnect()->wait();
+        cout << "OK" << endl;
     }
     catch (const std::exception& error) {
         std::cerr << "[ ERROR ] " << error.what() << std::endl;
+        return 1;
+    }
+    catch (const mqtt::exception& exc) {
+        std::cerr << exc.what() << endl;
         return 1;
     }
     catch (...) {

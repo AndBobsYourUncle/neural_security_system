@@ -36,6 +36,10 @@ Options:
     -t                        Optional. Probability threshold for detections.
     -iou_t                    Optional. Filtering intersection over union threshold for overlapping boxes.
     -auto_resize              Optional. Enable resizable input with support of ROI crop and auto resize.
+    -u "<mqtt_username>"    Required. Username for the MQTT client
+    -p "<mqtt_password>"    Required. Password for the MQTT client
+    -to "<human_timeout>"   Optional. Seconds between no people detected and MQTT publish. Default is 5
+    -tp "<topic>"           Required. Topic to publish the presence of humans.    
 ```
 
 Running the application with the empty list of options yields the usage message given above and an error message.

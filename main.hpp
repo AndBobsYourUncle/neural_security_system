@@ -52,6 +52,12 @@ static const char raw_output_message[] = "Optional. Output inference results raw
 /// @brief Message resizable input flag
 static const char input_resizable_message[] = "Optional. Enable resizable input with support of ROI crop and auto resize.";
 
+static const char mqtt_username_message[] = "Required. Username for the MQTT client";
+static const char mqtt_password_message[] = "Required. Password for the MQTT client";
+
+static const char mqtt_timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5";
+
+static const char mqtt_topic_message[] = "Required. Topic to publish the presence of humans.";
 
 /// \brief Defines flag for showing help message <br>
 DEFINE_bool(h, false, help_message);
@@ -94,6 +100,12 @@ DEFINE_double(iou_t, 0.4, iou_thresh_output_message);
 /// It is an optional parameter
 DEFINE_bool(auto_resize, false, input_resizable_message);
 
+DEFINE_string(u, "", mqtt_username_message);
+DEFINE_string(p, "", mqtt_password_message);
+
+DEFINE_double(to, 5, mqtt_timeout_message);
+
+DEFINE_string(tp, "", mqtt_topic_message);
 
 /**
 * \brief This function shows a help message
@@ -104,15 +116,19 @@ static void showUsage() {
     std::cout << "Options:" << std::endl;
     std::cout << std::endl;
     std::cout << "    -h                        " << help_message << std::endl;
-    std::cout << "    -i \"<path>\"               " << video_message << std::endl;
-    std::cout << "    -m \"<path>\"               " << model_message << std::endl;
-    std::cout << "      -l \"<absolute_path>\"    " << custom_cpu_library_message << std::endl;
+    std::cout << "    -i \"<path>\"             " << video_message << std::endl;
+    std::cout << "    -m \"<path>\"             " << model_message << std::endl;
+    std::cout << "      -l \"<absolute_path>\"  " << custom_cpu_library_message << std::endl;
     std::cout << "          Or" << std::endl;
-    std::cout << "      -c \"<absolute_path>\"    " << custom_cldnn_message << std::endl;
-    std::cout << "    -d \"<device>\"             " << target_device_message << std::endl;
+    std::cout << "      -c \"<absolute_path>\"  " << custom_cldnn_message << std::endl;
+    std::cout << "    -d \"<device>\"           " << target_device_message << std::endl;
     std::cout << "    -pc                       " << performance_counter_message << std::endl;
     std::cout << "    -r                        " << raw_output_message << std::endl;
     std::cout << "    -t                        " << thresh_output_message << std::endl;
     std::cout << "    -iou_t                    " << iou_thresh_output_message << std::endl;
     std::cout << "    -auto_resize              " << input_resizable_message << std::endl;
+    std::cout << "    -u \"<mqtt_username>\"    " << mqtt_username_message << std::endl;
+    std::cout << "    -p \"<mqtt_password>\"    " << mqtt_password_message << std::endl;
+    std::cout << "    -to \"<human_timeout>\"   " << mqtt_timeout_message << std::endl;
+    std::cout << "    -tp \"<topic>\"           " << mqtt_topic_message << std::endl;
 }
