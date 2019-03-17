@@ -37,8 +37,6 @@
 #include <ctime>
 #include "mqtt/async_client.h"
 
-// #include <ncurses.h>
-// #include <unistd.h>  /* only for sleep() */
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -47,7 +45,6 @@
 #include <stdio.h>
 #include <string.h>
 #include <termios.h>
-
 
 using namespace std::chrono;
 
@@ -250,18 +247,6 @@ void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const un
     }
 }
 
-// int kbhit(void)
-// {
-//     int ch = getch();
-
-//     if (ch != ERR) {
-//         ungetch(ch);
-//         return 1;
-//     } else {
-//         return 0;
-//     }
-// }
-
 int main(int argc, char *argv[]) {
     // ------------------------------ Parsing and validating the input arguments ---------------------------------
     if (!ParseAndCheckCommandLine(argc, argv)) {
@@ -290,28 +275,6 @@ int main(int argc, char *argv[]) {
     random_device rnd;
     mt19937 gen(rnd());
     uniform_int_distribution<> dis(0, 100);
-
-    // initscr();
-
-    // cbreak();
-    // noecho();
-    // nodelay(stdscr, TRUE);
-
-    // scrollok(stdscr, TRUE);
-
-    char a;
-    stringstream ss;
-    string s;
-    string s2;
-    int i;
-    const char * cs;
-
-    // Here I attempt to set stdin to unbuffered, read directly from the keyboard.
-
-    struct termios term;
-    tcgetattr(STDIN_FILENO, &term);
-    term.c_lflag &= ~ICANON;
-    tcsetattr(STDIN_FILENO, TCSANOW, &term);
 
     try {
         // Connect to the MQTT broker
@@ -455,17 +418,33 @@ int main(int argc, char *argv[]) {
         bool humans_detected = false;
 
         while (true) {
+            cv::Mat source_frame;
+
             auto t0 = std::chrono::high_resolution_clock::now();
             // Here is the first asynchronous point:
             // in the Async mode, we capture frame to populate the NEXT infer request
             // in the regular mode, we capture frame to the CURRENT infer request
-            if (!cap.read(next_frame)) {
-                if (next_frame.empty()) {
+            if (!cap.read(source_frame)) {
+                if (source_frame.empty()) {
                     isLastFrame = true;  // end of video file
                 } else {
                     throw std::logic_error("Failed to get frame from cv::VideoCapture");
                 }
             }
+
+            double crop_width = width - FLAGS_cr - FLAGS_cl;
+            double crop_height = height - FLAGS_ct - FLAGS_cb;
+
+            // Setup a rectangle to define your region of interest
+            cv::Rect myROI(FLAGS_cl, FLAGS_ct, crop_width, crop_height);
+
+            // Crop the full image to that image contained by the rectangle myROI
+            // Note that this doesn't copy the data
+            cv::Mat croppedRef(source_frame, myROI);
+
+            // Copy the data into new matrix
+            croppedRef.copyTo(next_frame);
+
             if (isAsyncMode) {
                 if (isModeChanged) {
                     FrameToBlob(frame, async_infer_request_curr, inputName);
@@ -626,11 +605,12 @@ int main(int argc, char *argv[]) {
                 isAsyncMode ^= true;
                 isModeChanged = true;
             }
-
-            char kp = getchar();
-            if (kp == 27) {
-                slog::info << "Key press: " << kp << slog::endl;
-                break;
+            if(FLAGS_no_image) {
+                char kp = getchar();
+                if (kp == 27) {
+                    slog::info << "Key press: " << kp << slog::endl;
+                    break;
+                }
             }
         }
         // -----------------------------------------------------------------------------------------------------

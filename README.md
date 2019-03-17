@@ -44,12 +44,12 @@ neural_security_system [OPTION]
 Options:
 
     -h                        Print a usage message.
-    -i "<path>"               Required. Path to a video file (specify "cam0" to work with camera).
-    -m "<path>"               Required. Path to an .xml file with a trained model.
-      -l "<absolute_path>"    Optional. Required for CPU custom layers.Absolute path to a shared library with the layers implementation.
+    -i "<path>"             Required. Path to a video file (specify "cam" to work with camera).
+    -m "<path>"             Required. Path to an .xml file with a trained model.
+      -l "<absolute_path>"  Optional. Required for CPU custom layers.Absolute path to a shared library with the layers implementation.
           Or
-      -c "<absolute_path>"    Optional. Required for GPU custom kernels.Absolute path to the .xml file with the kernels description.
-    -d "<device>"             Optional. Specify a target device to infer on (CPU, GPU). The demo will look for a suitable plugin for the specified device
+      -c "<absolute_path>"  Optional. Required for GPU custom kernels.Absolute path to the .xml file with the kernels description.
+    -d "<device>"           Optional. Specify a target device to infer on (CPU, GPU). The demo will look for a suitable plugin for the specified device
     -pc                       Optional. Enable per-layer performance report.
     -r                        Optional. Output inference results raw values showing.
     -t                        Optional. Probability threshold for detections.
@@ -60,7 +60,11 @@ Options:
     -p "<mqtt_password>"    Required. Password for the MQTT client
     -to "<human_timeout>"   Optional. Seconds between no people detected and MQTT publish. Default is 5
     -tp "<topic>"           Required. Topic to publish the presence of humans.
-    -no_image                 Optional. Disables video out (for use as service)    
+    -no_image                 Optional. Disables video out (for use as service)
+    -cr "<pixels>"          Optional. Number of pixels to crop from the right.
+    -cb "<pixels>"          Optional. Number of pixels to crop from the bottom.
+    -cl "<pixels>"          Optional. Number of pixels to crop from the left.
+    -ct "<pixels>"          Optional. Number of pixels to crop from the top.
 ```
 
 Running the application with the empty list of options yields the usage message given above and an error message.

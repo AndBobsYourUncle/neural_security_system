@@ -63,6 +63,11 @@ static const char mqtt_topic_message[] = "Required. Topic to publish the presenc
 
 static const char mqtt_no_image_message[] = "Optional. Disables video out (for use as service)";
 
+static const char crop_right_message[] = "Optional. Number of pixels to crop from the right.";
+static const char crop_bottom_message[] = "Optional. Number of pixels to crop from the bottom.";
+static const char crop_left_message[] = "Optional. Number of pixels to crop from the left.";
+static const char crop_top_message[] = "Optional. Number of pixels to crop from the top.";
+
 /// \brief Defines flag for showing help message <br>
 DEFINE_bool(h, false, help_message);
 
@@ -115,6 +120,11 @@ DEFINE_string(tp, "", mqtt_topic_message);
 
 DEFINE_bool(no_image, false, mqtt_no_image_message);
 
+DEFINE_double(cr, 0, crop_right_message);
+DEFINE_double(cb, 0, crop_bottom_message);
+DEFINE_double(cl, 0, crop_left_message);
+DEFINE_double(ct, 0, crop_top_message);
+
 /**
 * \brief This function shows a help message
 */
@@ -141,4 +151,8 @@ static void showUsage() {
     std::cout << "    -to \"<human_timeout>\"   " << mqtt_timeout_message << std::endl;
     std::cout << "    -tp \"<topic>\"           " << mqtt_topic_message << std::endl;
     std::cout << "    -no_image                 " << mqtt_no_image_message << std::endl;
+    std::cout << "    -cr \"<pixels>\"          " << crop_right_message << std::endl;
+    std::cout << "    -cb \"<pixels>\"          " << crop_bottom_message << std::endl;
+    std::cout << "    -cl \"<pixels>\"          " << crop_left_message << std::endl;
+    std::cout << "    -ct \"<pixels>\"          " << crop_top_message << std::endl;
 }
