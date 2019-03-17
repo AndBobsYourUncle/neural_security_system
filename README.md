@@ -126,7 +126,7 @@ python3 convert_weights_pb.py --class_names coco.names \
 python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \ 
   --input_model frozen_yolov3_model.pb \ 
   --tensorflow_use_custom_operations_config yolo_v3_changed.json \
-  --input_shape [1,416,416,3] --data_type=FP16
+  --input_shape [1,416,416,3]
 mv frozen_yolov3_model.xml ~/neural_security_system/models/yolov3/FP32/
 mv frozen_yolov3_model.bin ~/neural_security_system/models/yolov3/FP32/
 cp coco.names ~/neural_security_system/models/yolov3/FP32/frozen_yolov3_model.labels
