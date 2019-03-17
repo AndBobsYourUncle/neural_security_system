@@ -2,7 +2,7 @@
 
 --
 
-The goal of this tool is to allow monitoring of a security camera, and to actively publish the presense of humans in a boolean MQTT topic. MQTT is a pubsub type protocol. This was inspired from [https://github.com/PINTO0309/OpenVINO-YoloV3](https://github.com/PINTO0309/OpenVINO-YoloV3)
+The goal of this tool is to allow monitoring of a security camera, and to actively publish the presense of humans to an MQTT topic. MQTT is a pubsub type protocol. This was inspired from [https://github.com/PINTO0309/OpenVINO-YoloV3](https://github.com/PINTO0309/OpenVINO-YoloV3)
 
 # Instructions for Building
 
