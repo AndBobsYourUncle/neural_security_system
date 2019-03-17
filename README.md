@@ -7,7 +7,7 @@ The goal of this tool is to allow monitoring of a security camera, and to active
 # Instructions for Building
 
 * Download and install the OpenVINO toolkit: [https://software.intel.com/en-us/articles/OpenVINO-Install-Linux](https://software.intel.com/en-us/articles/OpenVINO-Install-Linux). This project assumes you have installed the toolkit as a regular user, and not root. When you get to the step to run `sudo ./install_GUI.sh`, run it without `sudo` instead.
-2. Install paho MQTT library
+* Install paho MQTT library
 
 ```bash
 sudo apt-get install libssl-dev
