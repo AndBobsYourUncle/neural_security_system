@@ -144,7 +144,7 @@ python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \
   --input_shape [1,416,416,3] --data_type=FP16
 mv frozen_tiny_yolov3_model.xml ~/neural_security_system/models/tiny_yolov3/FP16/
 mv frozen_tiny_yolov3_model.bin ~/neural_security_system/models/tiny_yolov3/FP16/
-cp coco.names ~/neural_security_system/models/tiny_yolov3/FP16/frozen_yolov3_model.labels
+cp coco.names ~/neural_security_system/models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.labels
 ```
 
 Building Tiny YOLOv3 FP32 version:
@@ -159,5 +159,5 @@ python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \
   --input_shape [1,416,416,3]
 mv frozen_tiny_yolov3_model.xml ~/neural_security_system/models/tiny_yolov3/FP32/
 mv frozen_tiny_yolov3_model.bin ~/neural_security_system/models/tiny_yolov3/FP32/
-cp coco.names ~/neural_security_system/models/tiny_yolov3/FP32/frozen_yolov3_model.labels
+cp coco.names ~/neural_security_system/models/tiny_yolov3/FP32/frozen_tiny_yolov3_model.labels
 ```
