@@ -27,6 +27,7 @@ sudo ldconfig
 ```
 
 * After you have installed all the prerequisites, build the sample projects. `cd ~/intel/openvino/deployment_tools/demo`, `./demo_squeezenet_download_convert_run.sh`
+* Downgrade Tensorflow: `pip3 install tensorflow==1.12.0 --upgrade`
 * Now that you have the sample built, you should be able to copy `libcpu_extension.so` to the `lib/` folder of this repo (just in case the version here is outdated). It's most likely going to be located here: `~/inference_engine_samples/intel64/Release/lib/libcpu_extension.so`
 * `make -B`
 
