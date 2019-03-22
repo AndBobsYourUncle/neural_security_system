@@ -71,7 +71,7 @@ bool exit_gracefully = false;
 #define yolo_scale_52 52
 
 void signalHandler(int signum) {
-   cout << "Interrupt signal (" << signum << ") received.\n";
+   cout << "Interrupt signal (" << signum << ") received. Exiting gracefully...\n";
 
    exit_gracefully = true;
 }
