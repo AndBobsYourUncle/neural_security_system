@@ -2,12 +2,12 @@
 
 --
 
-The goal of this tool is to allow monitoring of a security camera, and to actively publish the presense of humans in a boolean MQTT topic. MQTT is a pubsub type protocol. This was inspired from [https://github.com/PINTO0309/OpenVINO-YoloV3](https://github.com/PINTO0309/OpenVINO-YoloV3)
+The goal of this tool is to allow monitoring of a security camera, and to actively publish the presense of humans to an MQTT topic. MQTT is a pubsub type protocol. This was inspired from [https://github.com/PINTO0309/OpenVINO-YoloV3](https://github.com/PINTO0309/OpenVINO-YoloV3)
 
 # Instructions for Building
 
 * Download and install the OpenVINO toolkit: [https://software.intel.com/en-us/articles/OpenVINO-Install-Linux](https://software.intel.com/en-us/articles/OpenVINO-Install-Linux). This project assumes you have installed the toolkit as a regular user, and not root. When you get to the step to run `sudo ./install_GUI.sh`, run it without `sudo` instead.
-2. Install paho MQTT library
+* Install paho MQTT library
 
 ```bash
 sudo apt-get install libssl-dev
@@ -27,6 +27,7 @@ sudo ldconfig
 ```
 
 * After you have installed all the prerequisites, build the sample projects. `cd ~/intel/openvino/deployment_tools/demo`, `./demo_squeezenet_download_convert_run.sh`
+* Downgrade Tensorflow: `pip3 install tensorflow==1.12.0 --upgrade`
 * Now that you have the sample built, you should be able to copy `libcpu_extension.so` to the `lib/` folder of this repo (just in case the version here is outdated). It's most likely going to be located here: `~/inference_engine_samples/intel64/Release/lib/libcpu_extension.so`
 * `make -B`
 
@@ -69,30 +70,13 @@ Options:
 
 Running the application with the empty list of options yields the usage message given above and an error message.
 You can use the following command to do inference on GPU with a pre-trained object detection model:
-### CPU + USB Camera Mode + Full size YoloV3 (Selectable cam0/cam1/cam2)
+### My Example Usage (MMJPEG security camera) w/ CPU
 ```bash
-$ cd cpp
-$ ./object_detection_demo_yolov3_async -i cam0 -m ../lrmodels/YoloV3/FP32/frozen_yolo_v3.xml -d CPU
+$ ./neural_security_system -i http://192.168.1.52:8081 -m ./models/tiny_yolov3/FP32/frozen_tiny_yolo_v3.xml -d CPU -t 0.2 -u user -p password -tp cameras/front_door/humans -no_image -mh tcp://192.168.1.51:1883 -cr 150
 ```
-### MYRIAD + USB Camera Mode + Full size YoloV3 (Selectable cam0/cam1/cam2)
+### My Example Usage (MMJPEG security camera) w/ Intel Neural Compute Stick 2
 ```bash
-$ cd cpp
-$ ./object_detection_demo_yolov3_async -i cam0 -m ../lrmodels/tiny-YoloV3/FP16/frozen_tiny_yolo_v3.xml -d MYRIAD
-```
-### CPU + USB Camera Mode + tiny-YoloV3 (Selectable cam0/cam1/cam2)
-```bash
-$ cd cpp
-$ ./object_detection_demo_yolov3_async -i cam0 -m ../lrmodels/tiny-YoloV3/FP16/frozen_yolo_v3.xml -d CPU
-```
-### MYRIAD + USB Camera Mode + tiny-YoloV3 (Selectable cam0/cam1/cam2)
-```bash
-$ cd cpp
-$ ./object_detection_demo_yolov3_async -i cam0 -m ../lrmodels/tiny-YoloV3/FP16/frozen_tiny_yolo_v3.xml -d MYRIAD -t 0.2
-```
-### Movie File Mode
-```bash
-$ cd cpp
-$ ./object_detection_demo_yolov3_async -i <path_to_video>/inputVideo.mp4 -m <path_to_model>/frozen_yolo_v3.xml -l ../lib/libcpu_extension.so -d CPU
+$ ./neural_security_system -i http://192.168.1.52:8081 -m ./models/tiny_yolov3/FP16/frozen_tiny_yolo_v3.xml -d MYRIAD -t 0.2 -u user -p password -tp cameras/front_door/humans -no_image -mh tcp://192.168.1.51:1883 -cr 150
 ```
 **NOTE**: Public models should be first converted to the Inference Engine format (`*.xml` + `*.bin`) using the Model Optimizer tool.
 
@@ -143,7 +127,7 @@ python3 convert_weights_pb.py --class_names coco.names \
 python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \ 
   --input_model frozen_yolov3_model.pb \ 
   --tensorflow_use_custom_operations_config yolo_v3_changed.json \
-  --input_shape [1,416,416,3] --data_type=FP16
+  --input_shape [1,416,416,3]
 mv frozen_yolov3_model.xml ~/neural_security_system/models/yolov3/FP32/
 mv frozen_yolov3_model.bin ~/neural_security_system/models/yolov3/FP32/
 cp coco.names ~/neural_security_system/models/yolov3/FP32/frozen_yolov3_model.labels
@@ -161,7 +145,7 @@ python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \
   --input_shape [1,416,416,3] --data_type=FP16
 mv frozen_tiny_yolov3_model.xml ~/neural_security_system/models/tiny_yolov3/FP16/
 mv frozen_tiny_yolov3_model.bin ~/neural_security_system/models/tiny_yolov3/FP16/
-cp coco.names ~/neural_security_system/models/tiny_yolov3/FP16/frozen_yolov3_model.labels
+cp coco.names ~/neural_security_system/models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.labels
 ```
 
 Building Tiny YOLOv3 FP32 version:
@@ -176,5 +160,5 @@ python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \
   --input_shape [1,416,416,3]
 mv frozen_tiny_yolov3_model.xml ~/neural_security_system/models/tiny_yolov3/FP32/
 mv frozen_tiny_yolov3_model.bin ~/neural_security_system/models/tiny_yolov3/FP32/
-cp coco.names ~/neural_security_system/models/tiny_yolov3/FP32/frozen_yolov3_model.labels
+cp coco.names ~/neural_security_system/models/tiny_yolov3/FP32/frozen_tiny_yolov3_model.labels
 ```
