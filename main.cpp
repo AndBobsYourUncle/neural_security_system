@@ -46,6 +46,8 @@
 #include <string.h>
 #include <termios.h>
 
+#include <csignal>
+
 using namespace std::chrono;
 
 using namespace std;
@@ -62,10 +64,17 @@ const int MAX_BUFFERED_MSGS = 120;  // 120 * 5sec => 10min off-line buffering
 
 const string PERSIST_DIR { "data-persist" };
 
+bool exit_gracefully = false;
 
 #define yolo_scale_13 13
 #define yolo_scale_26 26
 #define yolo_scale_52 52
+
+void signalHandler(int signum) {
+   cout << "Interrupt signal (" << signum << ") received.\n";
+
+   exit_gracefully = true;
+}
 
 bool ParseAndCheckCommandLine(int argc, char *argv[]) {
     // ---------------------------Parsing and validating the input arguments--------------------------------------
@@ -248,6 +257,9 @@ void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const un
 }
 
 int main(int argc, char *argv[]) {
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
+
     // ------------------------------ Parsing and validating the input arguments ---------------------------------
     if (!ParseAndCheckCommandLine(argc, argv)) {
         return 0;
@@ -612,6 +624,8 @@ int main(int argc, char *argv[]) {
                     break;
                 }
             }
+            if(exit_gracefully)
+                break;
         }
         // -----------------------------------------------------------------------------------------------------
         // auto total_t1 = std::chrono::high_resolution_clock::now();
