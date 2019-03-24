@@ -268,9 +268,6 @@ int main(int argc, char *argv[]) {
     connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
     connOpts.set_clean_session(true);
     connOpts.set_automatic_reconnect(true);
-
-    std::cout << "MQTT Username: " << FLAGS_d << std::endl;
-
     connOpts.set_user_name(FLAGS_u);
     connOpts.set_password(FLAGS_p);
 
