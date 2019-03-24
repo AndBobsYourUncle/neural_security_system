@@ -1,6 +1,14 @@
+#include <stdlib.h>     /* getenv */
 #include <string>
 #include <chrono>
 #include <gflags/gflags.h>
+
+#include <random>
+#include <thread>
+#include <iostream>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
 
 #include <ie_device.hpp>
 #include <ie_plugin_config.hpp>
@@ -16,27 +24,6 @@
 #include <opencv2/imgproc/imgproc.hpp>
 #include <opencv2/video/video.hpp>
 
-#include <opencv2/opencv.hpp>
-#include <inference_engine.hpp>
-#include <ie_plugin_config.hpp>
-
-#include <stdlib.h>     /* getenv */
-
-#include "main.hpp"
-#include "slog.hpp"
-#include "args_helper.hpp"
-#include "common.hpp"
-#include "ocv_common.hpp"
-#include "args_helper.hpp"
-
-#include <random>
-#include <thread>
-#include <iostream>
-#include <cstdlib>
-#include <cstring>
-#include <ctime>
-#include "mqtt/async_client.h"
-
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -47,6 +34,14 @@
 #include <termios.h>
 
 #include <csignal>
+
+#include "main.hpp"
+#include "slog.hpp"
+#include "args_helper.hpp"
+#include "common.hpp"
+#include "ocv_common.hpp"
+
+#include "mqtt/async_client.h"
 
 using namespace std::chrono;
 
