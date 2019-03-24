@@ -12,6 +12,7 @@ The goal of this tool is to allow monitoring of a security camera, and to active
 ```bash
 sudo apt-get install libssl-dev
 
+cd ~/
 git clone https://github.com/eclipse/paho.mqtt.c.git
 cd paho.mqtt.c/
 git checkout v1.2.1
@@ -19,6 +20,7 @@ cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
 sudo cmake --build build/ --target install
 sudo ldconfig
 
+cd ~/
 git clone https://github.com/eclipse/paho.mqtt.cpp
 cd paho.mqtt.cpp/
 cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
