@@ -559,8 +559,9 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            if(!FLAGS_no_image)
+            if(!FLAGS_no_image) {
                 cv::imshow("Detection results", frame);
+            }
 
             if(has_people_in_frame && !humans_detected) {
                 humans_detected = true;
@@ -616,8 +617,9 @@ int main(int argc, char *argv[]) {
                     break;
                 }
             }
-            if(exit_gracefully)
+            if(exit_gracefully) {
                 break;
+            }
         }
         // -----------------------------------------------------------------------------------------------------
         // auto total_t1 = std::chrono::high_resolution_clock::now();
