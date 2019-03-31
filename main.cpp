@@ -286,6 +286,9 @@ int main(int argc, char *argv[]) {
         cli.connect(connOpts)->wait();
         cout << "OK\n" << endl;
 
+        // Initial publish for "off"
+        top.publish(std::move("OFF"));
+
         /** This demo covers a certain topology and cannot be generalized for any object detection **/
         std::cout << "InferenceEngine: " << GetInferenceEngineVersion() << std::endl;
 
