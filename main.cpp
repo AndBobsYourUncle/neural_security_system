@@ -613,13 +613,13 @@ int main(int argc, char *argv[]) {
                 isAsyncMode ^= true;
                 isModeChanged = true;
             }
-            if(FLAGS_no_image) {
-                char kp = getchar();
-                if (kp == 27) {
-                    slog::info << "Key press: " << kp << slog::endl;
-                    break;
-                }
-            }
+            // if(FLAGS_no_image) {
+            //     char kp = getchar();
+            //     if (kp == 27) {
+            //         slog::info << "Key press: " << kp << slog::endl;
+            //         break;
+            //     }
+            // }
             if(exit_gracefully) {
                 break;
             }
