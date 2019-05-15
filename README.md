@@ -111,7 +111,7 @@ Building YOLOv3 FP16 version:
 python3 convert_weights_pb.py --class_names coco.names \ 
   --data_format NHWC --weights_file yolov3.weights \ 
   --output_graph frozen_yolov3_model.pb
-python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \ 
+python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \ 
   --input_model frozen_yolov3_model.pb \ 
   --tensorflow_use_custom_operations_config yolo_v3_changed.json \
   --input_shape [1,416,416,3] --data_type=FP16
@@ -125,7 +125,7 @@ Building YOLOv3 FP32 version:
 python3 convert_weights_pb.py --class_names coco.names \ 
   --data_format NHWC --weights_file yolov3.weights \ 
   --output_graph frozen_yolov3_model.pb
-python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \ 
+python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \ 
   --input_model frozen_yolov3_model.pb \ 
   --tensorflow_use_custom_operations_config yolo_v3_changed.json \
   --input_shape [1,416,416,3]
@@ -140,7 +140,7 @@ Building Tiny YOLOv3 FP16 version:
 python3 convert_weights_pb.py --class_names coco.names \ 
   --data_format NHWC --weights_file yolov3-tiny.weights \ 
   --output_graph frozen_tiny_yolov3_model.pb --tiny
-python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \ 
+python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \ 
   --input_model frozen_tiny_yolov3_model.pb \ 
   --tensorflow_use_custom_operations_config yolo_v3_tiny_changed.json \
   --input_shape [1,416,416,3] --data_type=FP16
@@ -155,7 +155,7 @@ Building Tiny YOLOv3 FP32 version:
 python3 convert_weights_pb.py --class_names coco.names \ 
   --data_format NHWC --weights_file yolov3-tiny.weights \ 
   --output_graph frozen_tiny_yolov3_model.pb --tiny
-python3 ~/intel/computer_vision_sdk/deployment_tools/model_optimizer/mo_tf.py \ 
+python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \ 
   --input_model frozen_tiny_yolov3_model.pb \ 
   --tensorflow_use_custom_operations_config yolo_v3_tiny_changed.json \
   --input_shape [1,416,416,3]
