@@ -11,6 +11,7 @@ The goal of this tool is to allow monitoring of a security camera, and to active
 
 ```bash
 sudo apt-get install libssl-dev
+sudo apt-get install libgflags-dev
 
 cd ~/
 git clone https://github.com/eclipse/paho.mqtt.c.git
