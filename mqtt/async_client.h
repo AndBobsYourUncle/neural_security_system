@@ -6,7 +6,7 @@
 /////////////////////////////////////////////////////////////////////////////
 
 /*******************************************************************************
- * Copyright (c) 2013-2017 Frank Pagliughi <fpagliughi@mindspring.com>
+ * Copyright (c) 2013-2019 Frank Pagliughi <fpagliughi@mindspring.com>
  *
  * All rights reserved. This program and the accompanying materials
  * are made available under the terms of the Eclipse Public License v1.0
@@ -19,6 +19,7 @@
  *
  * Contributors:
  *    Frank Pagliughi - initial implementation and documentation
+ *    Frank Pagliughi - MQTT v5 support
  *******************************************************************************/
 
 #ifndef __mqtt_async_client_h
@@ -40,16 +41,30 @@
 #include <list>
 #include <memory>
 #include <tuple>
+#include <functional>
 #include <stdexcept>
 
 namespace mqtt {
 
-/** The version number for the client library. */
-const uint32_t VERSION = 0x00090000;
-/** The version string for the client library  */
-const string VERSION_STR("Paho MQTT C++ (mqttpp) v. 0.9");
-/** Copyright notice for the client library */
-const string COPYRIGHT("Copyright (c) 2013-2017 Frank Pagliughi");
+// OBSOLETE: The legacy constants that lacked the "PAHO_MQTTPP_" prefix
+// clashed with #define's from other libraries and will be removed at the
+// next major version upgrade.
+
+#if defined(PAHO_MQTTPP_VERSIONS)
+	/** The version number for the client library. */
+	const uint32_t PAHO_MQTTPP_VERSION = 0x01010000;
+	/** The version string for the client library  */
+	const string PAHO_MQTTPP_VERSION_STR("Paho MQTT C++ (mqttpp) v. 1.1");
+	/** Copyright notice for the client library */
+	const string PAHO_MQTTPP_COPYRIGHT("Copyright (c) 2013-2019 Frank Pagliughi");
+#else
+	/** The version number for the client library. */
+	const uint32_t VERSION = 0x01010000;
+	/** The version string for the client library  */
+	const string VERSION_STR("Paho MQTT C++ (mqttpp) v. 1.1");
+	/** Copyright notice for the client library */
+	const string COPYRIGHT("Copyright (c) 2013-2019 Frank Pagliughi");
+#endif
 
 /////////////////////////////////////////////////////////////////////////////
 
@@ -65,6 +80,11 @@ public:
 	/** Type for a thread-safe queue to consume messages synchronously */
 	using consumer_queue_type = std::unique_ptr<thread_queue<const_message_ptr>>;
 
+	/** Handler type for registering an individual message callback */
+	using message_handler = std::function<void(const_message_ptr)>;
+	/** Handler type for when a connecion is made or lost */
+	using connection_handler = std::function<void(const string& cause)>;
+
 private:
 	/** Lock guard type for this class */
 	using guard = std::unique_lock<std::mutex>;
@@ -79,10 +99,18 @@ private:
 	string serverURI_;
 	/** The client ID string that we provided to the server. */
 	string clientId_;
+	/** The MQTT protocol version we're connected at */
+	int mqttVersion_;
 	/** A user persistence wrapper (if any) */
 	std::unique_ptr<MQTTClient_persistence> persist_;
 	/** Callback supplied by the user (if any) */
 	callback* userCallback_;
+	/** Connection handler  */
+	connection_handler connHandler_;
+	/** Connection lost handler  */
+	connection_handler connLostHandler_;
+	/** Message handler (if any) */
+	message_handler msgHandler_;
 	/** Copy of connect token (for re-connects) */
 	token_ptr connTok_;
 	/** A list of tokens that are in play */
@@ -111,6 +139,12 @@ private:
 	async_client() =delete;
 	async_client(const async_client&) =delete;
 	async_client& operator=(const async_client&) =delete;
+
+	/** Checks a function return code and throws on error. */
+	static void check_ret(int rc) {
+		if (rc != MQTTASYNC_SUCCESS)
+			throw exception(rc);
+	}
 
 public:
 	/**
@@ -178,6 +212,37 @@ public:
 	 */
 	~async_client() override;
 	/**
+	 * Sets a callback listener to use for events that happen
+	 * asynchronously.
+	 * @param cb callback receiver which will be invoked for certain
+	 *  		 asynchronous events
+	 */
+	void set_callback(callback& cb) override;
+	/**
+	 * Stops callbacks.
+	 * This is not normally called by the application. It should be used
+	 * cautiously as it may cause the application to lose messages.
+	 */
+	void disable_callbacks() override;
+	/**
+	 * Callback for when a connection is made.
+	 * @param cb Callback functor for when the connection is made.
+	 */
+	void set_connected_handler(connection_handler cb) /*override*/;
+	/**
+	 * Callback for when a connection is lost.
+	 * @param cb Callback functor for when the connection is lost.
+	 */
+	void set_connection_lost_handler(connection_handler cb) /*override*/;
+	/**
+	 * Sets the callback for when a message arrives from the broker.
+	 * Note that the application can only have one message handler which can
+	 * be installed individually using this method, or installled as a
+	 * listener object.
+	 * @param cb The callback functor to register with the library.
+	 */
+	void set_message_callback(message_handler cb) /*override*/;
+	/**
 	 * Connects to an MQTT server using the default options.
 	 * @return token used to track and wait for the connect to complete. The
 	 *  	   token will be passed to any callback that has been set.
@@ -209,7 +274,7 @@ public:
 	 * @throw security_exception for security related problems
 	 */
 	token_ptr connect(connect_options options, void* userContext,
-					   iaction_listener& cb) override;
+					  iaction_listener& cb) override;
 	/**
 	 *
 	 * @param userContext optional object used to pass context to the
@@ -255,7 +320,9 @@ public:
 	 *  	   set.
 	 * @throw exception for problems encountered while disconnecting
 	 */
-	token_ptr disconnect(int timeout) override;
+	token_ptr disconnect(int timeout) override {
+		return disconnect(disconnect_options(timeout));
+	}
 	/**
 	 * Disconnects from the server.
 	 * @param timeout the amount of time in milliseconds to allow for
@@ -438,49 +505,6 @@ public:
 	delivery_token_ptr publish(const_message_ptr msg,
 							   void* userContext, iaction_listener& cb) override;
 	/**
-	 * Sets a callback listener to use for events that happen
-	 * asynchronously.
-	 * @param cb callback receiver which will be invoked for certain
-	 *  		 asynchronous events
-	 */
-	void set_callback(callback& cb) override;
-	/**
-	 * Stops callbacks.
-	 * This is not normally called by the application. It should be used
-	 * cautiously as it may cause the application to lose messages.
-	 */
-	void disable_callbacks() override;
-	/**
-	 * Subscribe to multiple topics, each of which may include wildcards.
-	 * @param topicFilters
-	 * @param qos the maximum quality of service at which to subscribe.
-	 *  		  Messages published at a lower quality of service will be
-	 *  		  received at the published QoS. Messages published at a
-	 *  		  higher quality of service will be received using the QoS
-	 *  		  specified on the subscribe.
-	 * @return token used to track and wait for the subscribe to complete.
-	 *  	   The token will be passed to callback methods if set.
-	 */
-	token_ptr subscribe(const_string_collection_ptr topicFilters,
-						 const qos_collection& qos) override;
-	/**
-	 * Subscribes to multiple topics, each of which may include wildcards.
-	 * @param topicFilters
-	 * @param qos the maximum quality of service at which to subscribe.
-	 *  		  Messages published at a lower quality of service will be
-	 *  		  received at the published QoS. Messages published at a
-	 *  		  higher quality of service will be received using the QoS
-	 *  		  specified on the subscribe.
-	 * @param userContext optional object used to pass context to the
-	 *  				  callback. Use @em nullptr if not required.
-	 * @param cb listener that will be notified when subscribe has completed
-	 * @return token used to track and wait for the subscribe to complete.
-	 *  	   The token will be passed to callback methods if set.
-	 */
-	token_ptr subscribe(const_string_collection_ptr topicFilters,
-						 const qos_collection& qos,
-						 void* userContext, iaction_listener& cb) override;
-	/**
 	 * Subscribe to a topic, which may include wildcards.
 	 * @param topicFilter the topic to subscribe to, which can include
 	 *  				  wildcards.
@@ -489,7 +513,8 @@ public:
 	 * @return token used to track and wait for the subscribe to complete.
 	 *  	   The token will be passed to callback methods if set.
 	 */
-	token_ptr subscribe(const string& topicFilter, int qos) override;
+	token_ptr subscribe(const string& topicFilter, int qos,
+						const subscribe_options& opts=subscribe_options()) override;
 	/**
 	 * Subscribe to a topic, which may include wildcards.
 	 * @param topicFilter the topic to subscribe to, which can include
@@ -506,7 +531,40 @@ public:
 	 *  	   The token will be passed to callback methods if set.
 	 */
 	token_ptr subscribe(const string& topicFilter, int qos,
-						void* userContext, iaction_listener& cb) override;
+						void* userContext, iaction_listener& cb,
+						const subscribe_options& opts=subscribe_options()) override;
+	/**
+	 * Subscribe to multiple topics, each of which may include wildcards.
+	 * @param topicFilters
+	 * @param qos the maximum quality of service at which to subscribe.
+	 *  		  Messages published at a lower quality of service will be
+	 *  		  received at the published QoS. Messages published at a
+	 *  		  higher quality of service will be received using the QoS
+	 *  		  specified on the subscribe.
+	 * @return token used to track and wait for the subscribe to complete.
+	 *  	   The token will be passed to callback methods if set.
+	 */
+	token_ptr subscribe(const_string_collection_ptr topicFilters,
+						const qos_collection& qos,
+						const std::vector<subscribe_options>& opts=std::vector<subscribe_options>()) override;
+	/**
+	 * Subscribes to multiple topics, each of which may include wildcards.
+	 * @param topicFilters
+	 * @param qos the maximum quality of service at which to subscribe.
+	 *  		  Messages published at a lower quality of service will be
+	 *  		  received at the published QoS. Messages published at a
+	 *  		  higher quality of service will be received using the QoS
+	 *  		  specified on the subscribe.
+	 * @param userContext optional object used to pass context to the
+	 *  				  callback. Use @em nullptr if not required.
+	 * @param cb listener that will be notified when subscribe has completed
+	 * @return token used to track and wait for the subscribe to complete.
+	 *  	   The token will be passed to callback methods if set.
+	 */
+	token_ptr subscribe(const_string_collection_ptr topicFilters,
+						const qos_collection& qos,
+						void* userContext, iaction_listener& cb,
+						const std::vector<subscribe_options>& opts=std::vector<subscribe_options>()) override;
 	/**
 	 * Requests the server unsubscribe the client from a topic.
 	 * @param topicFilter the topic to unsubscribe from. It must match a
@@ -590,7 +648,19 @@ public:
 		return que_->try_get_for(msg, relTime);
 	}
 	/**
-	 * Waits until a specific time for a message to occur.
+	 * Waits a limited time for a message to arrive.
+	 * @param relTime The maximum amount of time to wait for a message.
+	 * @return A shared pointer to the message that was received. It will be
+	 *  	   empty on timeout.
+	 */
+	template <typename Rep, class Period>
+	const_message_ptr try_consume_message_for(const std::chrono::duration<Rep, Period>& relTime) {
+		const_message_ptr msg;
+		que_->try_get_for(&msg, relTime);
+		return msg;
+	}
+	/**
+	 * Waits until a specific time for a message to appear.
 	 * @param msg Pointer to the value to receive the message
 	 * @param absTime The time point to wait until, before timing out.
 	 * @return @em true if a message was read, @em false if a timeout
@@ -600,6 +670,19 @@ public:
 	bool try_consume_message_until(const_message_ptr* msg,
 								   const std::chrono::time_point<Clock,Duration>& absTime) {
 		return que_->try_get_until(msg, absTime);
+	}
+	/**
+	 * Waits until a specific time for a message to appear.
+	 * @param msg Pointer to the value to receive the message
+	 * @param absTime The time point to wait until, before timing out.
+	 * @return @em true if a message was read, @em false if a timeout
+	 *  	   occurred.
+	 */
+	template <class Clock, class Duration>
+	const_message_ptr try_consume_message_until(const std::chrono::time_point<Clock,Duration>& absTime) {
+		const_message_ptr msg;
+		que_->try_get_until(msg, absTime);
+		return msg;
 	}
 
 };

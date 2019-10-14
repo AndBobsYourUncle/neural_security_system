@@ -24,7 +24,9 @@
 #define __mqtt_disconnect_options_h
 
 #include "MQTTAsync.h"
+#include "mqtt/types.h"
 #include "mqtt/token.h"
+#include "mqtt/properties.h"
 #include <chrono>
 
 namespace mqtt {
@@ -45,6 +47,9 @@ class disconnect_options
 	/** Shared token pointer for context, if any */
 	token_ptr tok_;
 
+	/** Disconnect message properties */
+	properties props_;
+
 	/** The client has special access */
 	friend class async_client;
 	friend class disconnect_options_test;
@@ -57,19 +62,18 @@ public:
 	/**
 	 * Creates disconnect options tied to the specific token.
 	 * @param timeout The timeout (in milliseconds).
-	 * @param tok A token to be used as the context.
 	 */
-	disconnect_options(int timeout, const token_ptr& tok);
+	disconnect_options(int timeout) : disconnect_options() {
+		set_timeout(timeout);
+	}
 	/**
 	 * Creates disconnect options tied to the specific token.
 	 * @param to The timeout.
-	 * @param tok A token to be used as the context.
 	 */
 	template <class Rep, class Period>
-	disconnect_options(const std::chrono::duration<Rep, Period>& to,
-					   const token_ptr& tok) : disconnect_options() {
+	disconnect_options(const std::chrono::duration<Rep, Period>& to)
+			: disconnect_options() {
 		set_timeout(to);
-		set_token(tok);
 	}
 	/**
 	 * Copy constructor.
@@ -118,13 +122,50 @@ public:
 	/**
 	 * Sets the callback context to a delivery token.
 	 * @param tok The delivery token to be used as the callback context.
+	 * @param mqttVersion The version of MQTT we're using for the
+	 *  				  connection.
 	 */
-	void set_token(const token_ptr& tok);
+	void set_token(const token_ptr& tok, int mqttVersion);
 	/**
 	 * Gets the callback context to a delivery token.
 	 * @return The delivery token to be used as the callback context.
 	 */
 	token_ptr get_token() const { return tok_; }
+	/**
+	 * Gets the connect properties.
+	 * @return A const reference to the properties for the connect.
+	 */
+	const properties& get_properties() const { return props_; }
+	/**
+	 * Sets the properties for the connect.
+	 * @param props The properties to place into the message.
+	 */
+	void set_properties(const properties& props) {
+		props_ = props;
+		opts_.properties = props_.c_struct();
+	}
+	/**
+	 * Moves the properties for the connect.
+	 * @param props The properties to move into the connect object.
+	 */
+	void set_properties(properties&& props) {
+		props_ = props;
+		opts_.properties = props_.c_struct();
+	}
+	/**
+	 * Gets the reason code for the disconnect.
+	 * @return The reason code for the disconnect.
+	 */
+	ReasonCode get_reason_code() const {
+		return ReasonCode(opts_.reasonCode);
+	}
+	/**
+	 * Sets the reason code for the disconnect.
+	 * @param code The reason code for the disconnect.
+	 */
+	void set_reason_code(ReasonCode code) {
+		opts_.reasonCode = MQTTReasonCodes(code);
+	}
 };
 
 /////////////////////////////////////////////////////////////////////////////
@@ -132,3 +173,4 @@ public:
 }
 
 #endif		// __mqtt_disconnect_options_h
+
