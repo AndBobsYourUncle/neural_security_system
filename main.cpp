@@ -1,55 +1,42 @@
-#include <stdlib.h>     /* getenv */
-#include <string>
-#include <chrono>
+// Copyright (C) 2018-2019 Intel Corporation
+// SPDX-License-Identifier: Apache-2.0
+//
+
+/**
+* \brief The entry point for the Inference Engine object_detection demo application
+* \file object_detection_demo_yolov3_async/main.cpp
+* \example object_detection_demo_yolov3_async/main.cpp
+*/
 #include <gflags/gflags.h>
-
-#include <random>
-#include <thread>
+#include <functional>
 #include <iostream>
-#include <cstdlib>
-#include <cstring>
-#include <ctime>
+#include <fstream>
+#include <random>
+#include <memory>
+#include <chrono>
+#include <vector>
+#include <string>
+#include <algorithm>
+#include <iterator>
 
-#include <ie_device.hpp>
-#include <ie_plugin_config.hpp>
-#include <ie_plugin_dispatcher.hpp>
-#include <ie_plugin_ptr.hpp>
 #include <inference_engine.hpp>
-#include <ie_plugin_cpp.hpp>
-#include <ie_extension.h>
-#include "ext_list.hpp"
 
-#include <opencv2/opencv.hpp>
-#include <opencv2/highgui/highgui.hpp>
-#include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/video/video.hpp>
-
-#include <sys/time.h>
-#include <sys/types.h>
-#include <unistd.h>
-
-#include <sstream>
-#include <stdio.h>
-#include <string.h>
-#include <termios.h>
+#include <ocv_common.hpp>
+#include <slog.hpp>
 
 #include <csignal>
+using namespace std::chrono;
+using namespace std;
 
 #include "main.hpp"
-#include "slog.hpp"
-#include "args_helper.hpp"
-#include "common.hpp"
-#include "ocv_common.hpp"
 
-#include "mqtt/async_client.h"
+#ifdef WITH_EXTENSIONS
+#include <ext_list.hpp>
+#endif
 
-using namespace std::chrono;
-
-using namespace std;
-using namespace cv;
-using namespace InferenceEngine::details;
 using namespace InferenceEngine;
 
+#include "mqtt/async_client.h"
 
 const int    QOS = 1;
 
@@ -61,12 +48,8 @@ const string PERSIST_DIR { "data-persist" };
 
 bool exit_gracefully = false;
 
-#define yolo_scale_13 13
-#define yolo_scale_26 26
-#define yolo_scale_52 52
-
 void signalHandler(int signum) {
-   cout << "Interrupt signal (" << signum << ") received. Exiting gracefully...\n";
+   std::cout << "Interrupt signal (" << signum << ") received. Exiting gracefully...\n";
 
    exit_gracefully = true;
 }
@@ -76,6 +59,7 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
     gflags::ParseCommandLineNonHelpFlags(&argc, &argv, true);
     if (FLAGS_h) {
         showUsage();
+        showAvailableDevices();
         return false;
     }
     slog::info << "Parsing input parameters" << slog::endl;
@@ -137,8 +121,11 @@ struct DetectionObject {
         this->confidence = confidence;
     }
 
-    bool operator<(const DetectionObject &s2) const {
+    bool operator <(const DetectionObject &s2) const {
         return this->confidence < s2.confidence;
+    }
+    bool operator >(const DetectionObject &s2) const {
+        return this->confidence > s2.confidence;
     }
 };
 
@@ -171,56 +158,24 @@ void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const un
         ", current W = " + std::to_string(out_blob_h));
     // --------------------------- Extracting layer parameters -------------------------------------
     auto num = layer->GetParamAsInt("num");
-    try { num = layer->GetParamAsInts("mask").size(); } catch (...) {}
     auto coords = layer->GetParamAsInt("coords");
     auto classes = layer->GetParamAsInt("classes");
-    std::vector<float> anchors = {10.0, 13.0, 16.0, 30.0, 33.0, 23.0, 30.0, 61.0, 62.0, 45.0, 59.0, 119.0, 116.0, 90.0, 156.0, 198.0, 373.0, 326.0};
+    std::vector<float> anchors = {10.0, 13.0, 16.0, 30.0, 33.0, 23.0, 30.0, 61.0, 62.0, 45.0, 59.0, 119.0, 116.0, 90.0,
+                                  156.0, 198.0, 373.0, 326.0};
     try { anchors = layer->GetParamAsFloats("anchors"); } catch (...) {}
+    try {
+        auto mask = layer->GetParamAsInts("mask");
+        num = mask.size();
+
+        std::vector<float> maskedAnchors(num * 2);
+        for (int i = 0; i < num; ++i) {
+            maskedAnchors[i * 2] = anchors[mask[i] * 2];
+            maskedAnchors[i * 2 + 1] = anchors[mask[i] * 2 + 1];
+        }
+        anchors = maskedAnchors;
+    } catch (...) {}
+
     auto side = out_blob_h;
-    int anchor_offset = 0;
-
-    //throw std::runtime_error("anchors.size() ==" + std::to_string(anchors.size()));
-
-    if (anchors.size() == 18) {        // YoloV3
-        switch (side) {
-            case yolo_scale_13:
-                anchor_offset = 2 * 6;
-                break;
-            case yolo_scale_26:
-                anchor_offset = 2 * 3;
-                break;
-            case yolo_scale_52:
-                anchor_offset = 2 * 0;
-                break;
-            default:
-                throw std::runtime_error("Invalid output size");
-        }
-    } else if (anchors.size() == 12) { // tiny-YoloV3
-        switch (side) {
-            case yolo_scale_13:
-                anchor_offset = 2 * 3;
-                break;
-            case yolo_scale_26:
-                anchor_offset = 2 * 0;
-                break;
-            default:
-                throw std::runtime_error("Invalid output size");
-        }
-    } else {                           // ???
-        switch (side) {
-            case yolo_scale_13:
-                anchor_offset = 2 * 6;
-                break;
-            case yolo_scale_26:
-                anchor_offset = 2 * 3;
-                break;
-            case yolo_scale_52:
-                anchor_offset = 2 * 0;
-                break;
-            default:
-                throw std::runtime_error("Invalid output size");
-        }
-    }
     auto side_square = side * side;
     const float *output_blob = blob->buffer().as<PrecisionTrait<Precision::FP32>::value_type *>();
     // --------------------------- Parsing YOLO Region output -------------------------------------
@@ -235,8 +190,8 @@ void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const un
                 continue;
             double x = (col + output_blob[box_index + 0 * side_square]) / side * resized_im_w;
             double y = (row + output_blob[box_index + 1 * side_square]) / side * resized_im_h;
-            double height = std::exp(output_blob[box_index + 3 * side_square]) * anchors[anchor_offset + 2 * n + 1];
-            double width = std::exp(output_blob[box_index + 2 * side_square]) * anchors[anchor_offset + 2 * n];
+            double height = std::exp(output_blob[box_index + 3 * side_square]) * anchors[2 * n + 1];
+            double width = std::exp(output_blob[box_index + 2 * side_square]) * anchors[2 * n];
             for (int j = 0; j < classes; ++j) {
                 int class_index = EntryIndex(side, coords, classes, n * side_square + i, coords + 1 + j);
                 float prob = scale * output_blob[class_index];
@@ -251,36 +206,32 @@ void ParseYOLOV3Output(const CNNLayerPtr &layer, const Blob::Ptr &blob, const un
     }
 }
 
+
 int main(int argc, char *argv[]) {
     signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
-    // ------------------------------ Parsing and validating the input arguments ---------------------------------
-    if (!ParseAndCheckCommandLine(argc, argv)) {
-        return 0;
-    }
-
-    string address = FLAGS_mh;
-
-    mqtt::async_client cli(address, "", MAX_BUFFERED_MSGS, PERSIST_DIR);
-
-    mqtt::connect_options connOpts;
-    connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
-    connOpts.set_clean_session(true);
-    connOpts.set_automatic_reconnect(true);
-    connOpts.set_user_name(FLAGS_u);
-    connOpts.set_password(FLAGS_p);
-
-    // Create a topic object. This is a conventience since we will
-    // repeatedly publish messages with the same parameters.
-    mqtt::topic top(cli, FLAGS_tp, QOS, true);
-
-    // Random number generator [0 - 100]
-    random_device rnd;
-    mt19937 gen(rnd());
-    uniform_int_distribution<> dis(0, 100);
-
     try {
+        // ------------------------------ Parsing and validating the input arguments ---------------------------------
+        if (!ParseAndCheckCommandLine(argc, argv)) {
+            return 0;
+        }
+
+        string address = FLAGS_mh;
+
+        mqtt::async_client cli(address, "", MAX_BUFFERED_MSGS, PERSIST_DIR);
+
+        mqtt::connect_options connOpts;
+        connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
+        connOpts.set_clean_session(true);
+        connOpts.set_automatic_reconnect(true);
+        connOpts.set_user_name(FLAGS_u);
+        connOpts.set_password(FLAGS_p);
+
+        // Create a topic object. This is a conventience since we will
+        // repeatedly publish messages with the same parameters.
+        mqtt::topic top(cli, FLAGS_tp, QOS, true);
+
         // Connect to the MQTT broker
         cout << "Connecting to server '" << address << "'..." << flush;
         cli.connect(connOpts)->wait();
@@ -294,17 +245,11 @@ int main(int argc, char *argv[]) {
 
         slog::info << "Reading input" << slog::endl;
         cv::VideoCapture cap;
-        if (FLAGS_i == "cam0") {
-            cap.open(0);
-        } else if (FLAGS_i == "cam1") {
-            cap.open(1);
-        } else if (FLAGS_i == "cam2") {
-            cap.open(2);
-        } else if (!(cap.open(FLAGS_i.c_str()))) {
+        if (!((FLAGS_i == "cam") ? cap.open(0) : cap.open(FLAGS_i.c_str()))) {
             throw std::logic_error("Cannot open input file or camera: " + FLAGS_i);
         }
 
-        // // read input (video) frame
+        // read input (video) frame
         cv::Mat frame;  cap >> frame;
         cv::Mat next_frame;
 
@@ -317,35 +262,39 @@ int main(int argc, char *argv[]) {
         }
         // -----------------------------------------------------------------------------------------------------
 
-        // --------------------------- 1. Load Plugin for inference engine -------------------------------------
-        slog::info << "Loading plugin" << slog::endl;
-        InferencePlugin plugin = PluginDispatcher({"../lib", ""}).getPluginByDevice(FLAGS_d);
-        printPluginVersion(plugin, std::cout);
+        // --------------------------- 1. Load inference engine -------------------------------------
+        slog::info << "Loading Inference Engine" << slog::endl;
+        Core ie;
 
-        /**Loading extensions to the plugin **/
+        slog::info << "Device info: " << slog::endl;
+        std::cout << ie.GetVersions(FLAGS_d);
 
+        /**Loading extensions to the devices **/
+
+#ifdef WITH_EXTENSIONS
         /** Loading default extensions **/
         if (FLAGS_d.find("CPU") != std::string::npos) {
             /**
              * cpu_extensions library is compiled from the "extension" folder containing
              * custom CPU layer implementations.
             **/
-            plugin.AddExtension(std::make_shared<Extensions::Cpu::CpuExtensions>());
+            ie.AddExtension(std::make_shared<Extensions::Cpu::CpuExtensions>(), "CPU");
         }
+#endif
 
         if (!FLAGS_l.empty()) {
             // CPU extensions are loaded as a shared library and passed as a pointer to the base extension
             IExtensionPtr extension_ptr = make_so_pointer<IExtension>(FLAGS_l.c_str());
-            plugin.AddExtension(extension_ptr);
+            ie.AddExtension(extension_ptr, "CPU");
         }
         if (!FLAGS_c.empty()) {
             // GPU extensions are loaded from an .xml description and OpenCL kernel files
-            plugin.SetConfig({{PluginConfigParams::KEY_CONFIG_FILE, FLAGS_c}});
+            ie.SetConfig({{PluginConfigParams::KEY_CONFIG_FILE, FLAGS_c}}, "GPU");
         }
 
         /** Per-layer metrics **/
         if (FLAGS_pc) {
-            plugin.SetConfig({ { PluginConfigParams::KEY_PERF_COUNT, PluginConfigParams::YES } });
+            ie.SetConfig({ { PluginConfigParams::KEY_PERF_COUNT, PluginConfigParams::YES } });
         }
         // -----------------------------------------------------------------------------------------------------
 
@@ -389,18 +338,15 @@ int main(int argc, char *argv[]) {
         // --------------------------------- Preparing output blobs -------------------------------------------
         slog::info << "Checking that the outputs are as the demo expects" << slog::endl;
         OutputsDataMap outputInfo(netReader.getNetwork().getOutputsInfo());
-        //if (outputInfo.size() != 3) {
-        //    throw std::logic_error("This demo only accepts networks with three layers");
-        //}
         for (auto &output : outputInfo) {
             output.second->setPrecision(Precision::FP32);
             output.second->setLayout(Layout::NCHW);
         }
         // -----------------------------------------------------------------------------------------------------
 
-        // --------------------------- 4. Loading model to the plugin ------------------------------------------
-        slog::info << "Loading model to the plugin" << slog::endl;
-        ExecutableNetwork network = plugin.LoadNetwork(netReader.getNetwork(), {});
+        // --------------------------- 4. Loading model to the device ------------------------------------------
+        slog::info << "Loading model to the device" << slog::endl;
+        ExecutableNetwork network = ie.LoadNetwork(netReader.getNetwork(), FLAGS_d);
 
         // -----------------------------------------------------------------------------------------------------
 
@@ -420,6 +366,9 @@ int main(int argc, char *argv[]) {
         auto total_t0 = std::chrono::high_resolution_clock::now();
         auto wallclock = std::chrono::high_resolution_clock::now();
         double ocv_decode_time = 0, ocv_render_time = 0;
+
+        std::cout << "To close the application, press 'CTRL+C' here or switch to the output window and press ESC key" << std::endl;
+        std::cout << "To switch between sync/async modes, press TAB key in the output window" << std::endl;
 
         auto time_humans_detected = std::chrono::high_resolution_clock::now();
         bool humans_detected = false;
@@ -494,45 +443,41 @@ int main(int argc, char *argv[]) {
                 std::ostringstream out;
                 out << "OpenCV cap/render time: " << std::fixed << std::setprecision(2)
                     << (ocv_decode_time + ocv_render_time) << " ms";
-                cv::putText(frame, out.str(), cv::Point2f(0, 25), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 255, 0), 1, cv::LINE_AA);
+                cv::putText(frame, out.str(), cv::Point2f(0, 25), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 255, 0));
                 out.str("");
                 out << "Wallclock time " << (isAsyncMode ? "(TRUE ASYNC):      " : "(SYNC, press Tab): ");
                 out << std::fixed << std::setprecision(2) << wall.count() << " ms (" << 1000.f / wall.count() << " fps)";
-                cv::putText(frame, out.str(), cv::Point2f(0, 50), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+                cv::putText(frame, out.str(), cv::Point2f(0, 50), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 0, 255));
                 if (!isAsyncMode) {  // In the true async mode, there is no way to measure detection time directly
                     out.str("");
                     out << "Detection time  : " << std::fixed << std::setprecision(2) << detection.count()
                         << " ms ("
                         << 1000.f / detection.count() << " fps)";
-                    cv::putText(frame, out.str(), cv::Point2f(0, 75), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(255, 0, 0), 1, cv::LINE_AA);
+                    cv::putText(frame, out.str(), cv::Point2f(0, 75), cv::FONT_HERSHEY_TRIPLEX, 0.6,
+                                cv::Scalar(255, 0, 0));
                 }
 
                 // ---------------------------Processing output blobs--------------------------------------------------
                 // Processing results of the CURRENT request
-                unsigned long resized_im_h = inputInfo.begin()->second.get()->getDims()[0];
-                unsigned long resized_im_w = inputInfo.begin()->second.get()->getDims()[1];
+                const TensorDesc& inputDesc = inputInfo.begin()->second.get()->getTensorDesc();
+                unsigned long resized_im_h = getTensorHeight(inputDesc);
+                unsigned long resized_im_w = getTensorWidth(inputDesc);
                 std::vector<DetectionObject> objects;
                 // Parsing outputs
                 for (auto &output : outputInfo) {
                     auto output_name = output.first;
-                    //slog::info << "output_name = " + output_name << slog::endl;
                     CNNLayerPtr layer = netReader.getNetwork().getLayerByName(output_name.c_str());
                     Blob::Ptr blob = async_infer_request_curr->GetBlob(output_name);
                     ParseYOLOV3Output(layer, blob, resized_im_h, resized_im_w, height, width, FLAGS_t, objects);
                 }
                 // Filtering overlapping boxes
-                std::sort(objects.begin(), objects.end());
-                for (int i = 0; i < objects.size(); ++i) {
+                std::sort(objects.begin(), objects.end(), std::greater<DetectionObject>());
+                for (size_t i = 0; i < objects.size(); ++i) {
                     if (objects[i].confidence == 0)
                         continue;
-                    for (int j = i + 1; j < objects.size(); ++j) {
-                        if (IntersectionOverUnion(objects[i], objects[j]) >= FLAGS_iou_t) {
+                    for (size_t j = i + 1; j < objects.size(); ++j)
+                        if (IntersectionOverUnion(objects[i], objects[j]) >= FLAGS_iou_t)
                             objects[j].confidence = 0;
-                        }
-                        //if (objects[j].confidence == 1) {
-                        //    objects[j].confidence = 0;
-                        //}
-                    }
                 }
                 // Drawing boxes
                 for (auto &object : objects) {
@@ -545,7 +490,6 @@ int main(int argc, char *argv[]) {
                                   "    (" << object.xmin << "," << object.ymin << ")-(" << object.xmax << "," << object.ymax << ")"
                                   << ((confidence > FLAGS_t) ? " WILL BE RENDERED!" : "") << std::endl;
                     }
-                    //slog::info << "confidence = " + std::to_string(confidence) << slog::endl;
                     if (confidence > FLAGS_t) {
                         if(labels[label] == std::string("person"))
                             has_people_in_frame = true;
@@ -554,15 +498,16 @@ int main(int argc, char *argv[]) {
                         std::ostringstream conf;
                         conf << ":" << std::fixed << std::setprecision(3) << confidence;
                         cv::putText(frame,
-                                (label < labels.size() ? labels[label] : std::string("label #") + std::to_string(label))
-                                    + conf.str(),
-                                    cv::Point2f(object.xmin, object.ymin - 5), cv::FONT_HERSHEY_COMPLEX_SMALL, 1, cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
-                        cv::rectangle(frame, cv::Point2f(object.xmin, object.ymin), cv::Point2f(object.xmax, object.ymax), cv::Scalar(0, 0, 255), 1, cv::LINE_AA);
+                                (label < static_cast<int>(labels.size()) ?
+                                        labels[label] : std::string("label #") + std::to_string(label)) + conf.str(),
+                                    cv::Point2f(static_cast<float>(object.xmin), static_cast<float>(object.ymin - 5)), cv::FONT_HERSHEY_COMPLEX_SMALL, 1,
+                                    cv::Scalar(0, 0, 255));
+                        cv::rectangle(frame, cv::Point2f(static_cast<float>(object.xmin), static_cast<float>(object.ymin)),
+                                      cv::Point2f(static_cast<float>(object.xmax), static_cast<float>(object.ymax)), cv::Scalar(0, 0, 255));
                     }
                 }
             }
-
-            if(!FLAGS_no_image) {
+            if (!FLAGS_no_show) {
                 cv::imshow("Detection results", frame);
             }
 
@@ -597,7 +542,6 @@ int main(int argc, char *argv[]) {
                 isModeChanged = false;
             }
 
-
             // Final point:
             // in the truly Async mode, we swap the NEXT and CURRENT requests for the next iteration
             frame = next_frame;
@@ -613,38 +557,22 @@ int main(int argc, char *argv[]) {
                 isAsyncMode ^= true;
                 isModeChanged = true;
             }
-            if(FLAGS_no_image) {
-                char kp = getchar();
-                if (kp == 27) {
-                    slog::info << "Key press: " << kp << slog::endl;
-                    break;
-                }
-            }
             if(exit_gracefully) {
                 break;
             }
         }
         // -----------------------------------------------------------------------------------------------------
-        // auto total_t1 = std::chrono::high_resolution_clock::now();
-        // ms total = std::chrono::duration_cast<ms>(total_t1 - total_t0);
-        // std::cout << "Total Inference time: " << total.count() << std::endl;
+        auto total_t1 = std::chrono::high_resolution_clock::now();
+        ms total = std::chrono::duration_cast<ms>(total_t1 - total_t0);
+        std::cout << "Total Inference time: " << total.count() << std::endl;
 
         /** Showing performace results **/
         if (FLAGS_pc) {
-            printPerformanceCounts(*async_infer_request_curr, std::cout);
+            printPerformanceCounts(*async_infer_request_curr, std::cout, getFullDeviceName(ie, FLAGS_d));
         }
-
-        // Disconnect
-        cout << "\nDisconnecting..." << flush;
-        cli.disconnect()->wait();
-        cout << "OK" << endl;
     }
     catch (const std::exception& error) {
         std::cerr << "[ ERROR ] " << error.what() << std::endl;
-        return 1;
-    }
-    catch (const mqtt::exception& exc) {
-        std::cerr << exc.what() << endl;
         return 1;
     }
     catch (...) {

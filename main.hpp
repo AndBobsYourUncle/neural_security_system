@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Intel Corporation
+// Copyright (C) 2018-2019 Intel Corporation
 // SPDX-License-Identifier: Apache-2.0
 //
 
@@ -10,12 +10,6 @@
 #include <gflags/gflags.h>
 #include <iostream>
 
-#ifdef _WIN32
-#include <os/windows/w_dirent.h>
-#else
-#include <dirent.h>
-#endif
-
 /// @brief Message for help argument
 static const char help_message[] = "Print a usage message.";
 
@@ -26,18 +20,18 @@ static const char video_message[] = "Required. Path to a video file (specify \"c
 static const char model_message[] = "Required. Path to an .xml file with a trained model.";
 
 /// @brief Message for assigning cnn calculation to device
-static const char target_device_message[] = "Optional. Specify a target device to infer on (CPU, GPU). " \
-"The demo will look for a suitable plugin for the specified device";
+static const char target_device_message[] = "Optional. Specify a target device to infer on (the list of available devices is shown below). " \
+"Default value is CPU. The demo will look for a suitable plugin for the specified device";
 
 /// @brief Message for performance counters
 static const char performance_counter_message[] = "Optional. Enable per-layer performance report.";
 
 /// @brief Message for clDNN custom kernels desc
-static const char custom_cldnn_message[] = "Optional. Required for GPU custom kernels."\
+static const char custom_cldnn_message[] = "Optional. Required for GPU custom kernels. "\
 "Absolute path to the .xml file with the kernels description.";
 
 /// @brief Message for user library argument
-static const char custom_cpu_library_message[] = "Optional. Required for CPU custom layers." \
+static const char custom_cpu_library_message[] = "Optional. Required for CPU custom layers. " \
 "Absolute path to a shared library with the layers implementation.";
 
 /// @brief Message for probability threshold argument
@@ -52,21 +46,8 @@ static const char raw_output_message[] = "Optional. Output inference results raw
 /// @brief Message resizable input flag
 static const char input_resizable_message[] = "Optional. Enable resizable input with support of ROI crop and auto resize.";
 
-static const char mqtt_host_message[] = "Required. MQTT broker connection (tcp://IP:1883)";
-
-static const char mqtt_username_message[] = "Required. Username for the MQTT client";
-static const char mqtt_password_message[] = "Required. Password for the MQTT client";
-
-static const char mqtt_timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5";
-
-static const char mqtt_topic_message[] = "Required. Topic to publish the presence of humans.";
-
-static const char mqtt_no_image_message[] = "Optional. Disables video out (for use as service)";
-
-static const char crop_right_message[] = "Optional. Number of pixels to crop from the right.";
-static const char crop_bottom_message[] = "Optional. Number of pixels to crop from the bottom.";
-static const char crop_left_message[] = "Optional. Number of pixels to crop from the left.";
-static const char crop_top_message[] = "Optional. Number of pixels to crop from the top.";
+/// @brief Message do not show processed video
+static const char no_show_processed_video[] = "Optional. Do not show processed video.";
 
 /// \brief Defines flag for showing help message <br>
 DEFINE_bool(h, false, help_message);
@@ -109,16 +90,34 @@ DEFINE_double(iou_t, 0.4, iou_thresh_output_message);
 /// It is an optional parameter
 DEFINE_bool(auto_resize, false, input_resizable_message);
 
+/// \brief Define a flag to disable showing processed video<br>
+/// It is an optional parameter
+DEFINE_bool(no_show, false, no_show_processed_video);
+
+static const char mqtt_host_message[] = "Required. Specify an MQTT host url";
+
 DEFINE_string(mh, "", mqtt_host_message);
 
-DEFINE_string(u, "", mqtt_username_message);
-DEFINE_string(p, "", mqtt_password_message);
+static const char mqtt_username[] = "Required. Specify an MQTT host username";
+
+DEFINE_string(u, "", mqtt_username);
+
+static const char mqtt_password[] = "Required. Specify an MQTT host password";
+
+DEFINE_string(p, "", mqtt_password);
+
+static const char mqtt_topic[] = "Required. Specify an MQTT topic";
+
+DEFINE_string(tp, "", mqtt_topic);
+
+static const char mqtt_timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5";
 
 DEFINE_double(to, 5, mqtt_timeout_message);
 
-DEFINE_string(tp, "", mqtt_topic_message);
-
-DEFINE_bool(no_image, false, mqtt_no_image_message);
+static const char crop_right_message[] = "Optional. Number of pixels to crop from the right.";
+static const char crop_bottom_message[] = "Optional. Number of pixels to crop from the bottom.";
+static const char crop_left_message[] = "Optional. Number of pixels to crop from the left.";
+static const char crop_top_message[] = "Optional. Number of pixels to crop from the top.";
 
 DEFINE_double(cr, 0, crop_right_message);
 DEFINE_double(cb, 0, crop_bottom_message);
@@ -130,27 +129,27 @@ DEFINE_double(ct, 0, crop_top_message);
 */
 static void showUsage() {
     std::cout << std::endl;
-    std::cout << "neural_security_system [OPTION]" << std::endl;
+    std::cout << "object_detection_demo_yolov3_async [OPTION]" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << std::endl;
     std::cout << "    -h                        " << help_message << std::endl;
-    std::cout << "    -i \"<path>\"             " << video_message << std::endl;
-    std::cout << "    -m \"<path>\"             " << model_message << std::endl;
-    std::cout << "      -l \"<absolute_path>\"  " << custom_cpu_library_message << std::endl;
+    std::cout << "    -i \"<path>\"               " << video_message << std::endl;
+    std::cout << "    -m \"<path>\"               " << model_message << std::endl;
+    std::cout << "      -l \"<absolute_path>\"    " << custom_cpu_library_message << std::endl;
     std::cout << "          Or" << std::endl;
-    std::cout << "      -c \"<absolute_path>\"  " << custom_cldnn_message << std::endl;
-    std::cout << "    -d \"<device>\"           " << target_device_message << std::endl;
+    std::cout << "      -c \"<absolute_path>\"    " << custom_cldnn_message << std::endl;
+    std::cout << "    -d \"<device>\"             " << target_device_message << std::endl;
     std::cout << "    -pc                       " << performance_counter_message << std::endl;
     std::cout << "    -r                        " << raw_output_message << std::endl;
     std::cout << "    -t                        " << thresh_output_message << std::endl;
     std::cout << "    -iou_t                    " << iou_thresh_output_message << std::endl;
     std::cout << "    -auto_resize              " << input_resizable_message << std::endl;
-    std::cout << "    -mh \"<mqtt_broker>\"     " << mqtt_username_message << std::endl;
-    std::cout << "    -u \"<mqtt_username>\"    " << mqtt_username_message << std::endl;
-    std::cout << "    -p \"<mqtt_password>\"    " << mqtt_password_message << std::endl;
+    std::cout << "    -no_show                  " << no_show_processed_video << std::endl;
+    std::cout << "    -mh                  " << mqtt_host_message << std::endl;
+    std::cout << "    -u                  " << mqtt_username << std::endl;
+    std::cout << "    -p                  " << mqtt_password << std::endl;
+    std::cout << "    -tp                  " << mqtt_topic << std::endl;
     std::cout << "    -to \"<human_timeout>\"   " << mqtt_timeout_message << std::endl;
-    std::cout << "    -tp \"<topic>\"           " << mqtt_topic_message << std::endl;
-    std::cout << "    -no_image                 " << mqtt_no_image_message << std::endl;
     std::cout << "    -cr \"<pixels>\"          " << crop_right_message << std::endl;
     std::cout << "    -cb \"<pixels>\"          " << crop_bottom_message << std::endl;
     std::cout << "    -cl \"<pixels>\"          " << crop_left_message << std::endl;
