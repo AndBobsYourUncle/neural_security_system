@@ -16,7 +16,7 @@ sudo apt-get install libgflags-dev
 cd ~/
 git clone https://github.com/eclipse/paho.mqtt.c.git
 cd paho.mqtt.c/
-git checkout v1.2.1
+git checkout v1.3.1
 cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
 sudo cmake --build build/ --target install
 sudo ldconfig
@@ -24,6 +24,7 @@ sudo ldconfig
 cd ~/
 git clone https://github.com/eclipse/paho.mqtt.cpp
 cd paho.mqtt.cpp/
+git checkout v1.1
 cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
 sudo cmake --build build/ --target install
 sudo ldconfig
