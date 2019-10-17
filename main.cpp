@@ -245,6 +245,9 @@ int main(int argc, char *argv[]) {
 
         slog::info << "Reading input" << slog::endl;
         cv::VideoCapture cap;
+
+        // cap.set(cv::CAP_PROP_BUFFERSIZE, 3);
+
         if (!((FLAGS_i == "cam") ? cap.open(0) : cap.open(FLAGS_i.c_str()))) {
             throw std::logic_error("Cannot open input file or camera: " + FLAGS_i);
         }
@@ -359,7 +362,7 @@ int main(int argc, char *argv[]) {
         slog::info << "Start inference " << slog::endl;
 
         bool isLastFrame = false;
-        bool isAsyncMode = false;  // execution is always started using SYNC mode
+        bool isAsyncMode = FLAGS_async;
         bool isModeChanged = false;  // set to TRUE when execution mode is changed (SYNC<->ASYNC)
 
         typedef std::chrono::duration<double, std::ratio<1, 1000>> ms;

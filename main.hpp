@@ -94,23 +94,23 @@ DEFINE_bool(auto_resize, false, input_resizable_message);
 /// It is an optional parameter
 DEFINE_bool(no_show, false, no_show_processed_video);
 
-static const char mqtt_host_message[] = "Required. Specify an MQTT host url";
+static const char mqtt_host_message[] = "Required. Specify an MQTT host url.";
 
 DEFINE_string(mh, "", mqtt_host_message);
 
-static const char mqtt_username[] = "Required. Specify an MQTT host username";
+static const char mqtt_username[] = "Required. Specify an MQTT host username.";
 
 DEFINE_string(u, "", mqtt_username);
 
-static const char mqtt_password[] = "Required. Specify an MQTT host password";
+static const char mqtt_password[] = "Required. Specify an MQTT host password.";
 
 DEFINE_string(p, "", mqtt_password);
 
-static const char mqtt_topic[] = "Required. Specify an MQTT topic";
+static const char mqtt_topic[] = "Required. Specify an MQTT topic.";
 
 DEFINE_string(tp, "", mqtt_topic);
 
-static const char mqtt_timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5";
+static const char mqtt_timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5.";
 
 DEFINE_double(to, 5, mqtt_timeout_message);
 
@@ -123,6 +123,10 @@ DEFINE_double(cr, 0, crop_right_message);
 DEFINE_double(cb, 0, crop_bottom_message);
 DEFINE_double(cl, 0, crop_left_message);
 DEFINE_double(ct, 0, crop_top_message);
+
+static const char async_message[] = "Optional. Start program in async mode.";
+
+DEFINE_bool(async, false, async_message);
 
 /**
 * \brief This function shows a help message
@@ -145,13 +149,14 @@ static void showUsage() {
     std::cout << "    -iou_t                    " << iou_thresh_output_message << std::endl;
     std::cout << "    -auto_resize              " << input_resizable_message << std::endl;
     std::cout << "    -no_show                  " << no_show_processed_video << std::endl;
-    std::cout << "    -mh                  " << mqtt_host_message << std::endl;
-    std::cout << "    -u                  " << mqtt_username << std::endl;
-    std::cout << "    -p                  " << mqtt_password << std::endl;
-    std::cout << "    -tp                  " << mqtt_topic << std::endl;
+    std::cout << "    -mh                       " << mqtt_host_message << std::endl;
+    std::cout << "    -u                        " << mqtt_username << std::endl;
+    std::cout << "    -p                        " << mqtt_password << std::endl;
+    std::cout << "    -tp                       " << mqtt_topic << std::endl;
     std::cout << "    -to \"<human_timeout>\"   " << mqtt_timeout_message << std::endl;
     std::cout << "    -cr \"<pixels>\"          " << crop_right_message << std::endl;
     std::cout << "    -cb \"<pixels>\"          " << crop_bottom_message << std::endl;
     std::cout << "    -cl \"<pixels>\"          " << crop_left_message << std::endl;
     std::cout << "    -ct \"<pixels>\"          " << crop_top_message << std::endl;
+    std::cout << "    -async                    " << async_message << std::endl;
 }
