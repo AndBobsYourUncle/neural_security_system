@@ -69,6 +69,7 @@ Options:
     -cb "<pixels>"          Optional. Number of pixels to crop from the bottom.
     -cl "<pixels>"          Optional. Number of pixels to crop from the left.
     -ct "<pixels>"          Optional. Number of pixels to crop from the top.
+    -async                    Optional. Start program in async mode.
 ```
 
 Running the application with the empty list of options yields the usage message given above and an error message.
