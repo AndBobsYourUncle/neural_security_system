@@ -1,12 +1,11 @@
 # Neural Security System
 
---
-
 The goal of this tool is to allow monitoring of a security camera, and to actively publish the presense of humans to an MQTT topic. MQTT is a pubsub type protocol. This was inspired from [https://github.com/PINTO0309/OpenVINO-YoloV3](https://github.com/PINTO0309/OpenVINO-YoloV3)
 
 # Instructions for Building
 
 * Download and install the OpenVINO toolkit: [https://software.intel.com/en-us/articles/OpenVINO-Install-Linux](https://software.intel.com/en-us/articles/OpenVINO-Install-Linux). This project assumes you have installed the toolkit as a regular user, and not root. When you get to the step to run `sudo ./install_GUI.sh`, run it without `sudo` instead.
+* This version (master branch of repo) is verified to be working with a fresh install of OpenVINO 2019-R3
 * Install paho MQTT library
 
 ```bash
