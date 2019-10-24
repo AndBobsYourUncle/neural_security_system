@@ -38,6 +38,8 @@ using namespace InferenceEngine;
 
 #include "mqtt/async_client.h"
 
+#include "yaml-cpp/yaml.h"
+
 const int    QOS = 1;
 
 const auto PERIOD = seconds(5);
@@ -212,6 +214,15 @@ int main(int argc, char *argv[]) {
     signal(SIGTERM, signalHandler);
 
     try {
+        YAML::Node config = YAML::LoadFile("cameras-sample.yaml");
+
+        const YAML::Node& cameras = config["cameras"];
+        for (std::size_t i=0;i<cameras.size();i++) {
+            const YAML::Node camera = cameras[i];
+            std::cout << "input: " << camera["input"].as<std::string>() << "\n";
+            std::cout << "mqtt_topic: " << camera["mqtt_topic"].as<std::string>() << "\n\n";
+        }
+
         // ------------------------------ Parsing and validating the input arguments ---------------------------------
         if (!ParseAndCheckCommandLine(argc, argv)) {
             return 0;

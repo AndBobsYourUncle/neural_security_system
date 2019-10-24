@@ -1,0 +1,15 @@
+cameras:
+  - input: http://testurl:8081
+    mqtt_topic: test_topic
+    crop_top: 80
+    crop_right: 150
+    crop_bottom: 0
+    crop_left: 0
+    tolerance: 0.3
+  - input: http://testurl2:8081
+    mqtt_topic: test_topic2
+    crop_top: 80
+    crop_right: 150
+    crop_bottom: 0
+    crop_left: 0
+    tolerance: 0.3

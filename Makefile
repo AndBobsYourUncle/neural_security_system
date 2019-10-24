@@ -15,8 +15,8 @@ CXXFLAGS += -O2
 CPPFLAGS += -fPIE
 CPPFLAGS += -O3
 
-LDLIBS += -L../../lib -L$(PAHO_C_LIB_DIR) -lpaho-mqttpp3 -lpaho-mqtt3a
-LDLIBS_SSL += -L../../lib -L$(PAHO_C_LIB_DIR) -lpaho-mqttpp3 -lpaho-mqtt3as
+LDLIBS += -L../../lib -L$(PAHO_C_LIB_DIR) -lpaho-mqttpp3 -lpaho-mqtt3a -lyaml-cpp
+LDLIBS_SSL += -L../../lib -L$(PAHO_C_LIB_DIR) -lpaho-mqttpp3 -lpaho-mqtt3as -lyaml-cpp
 
 neural_security_system:
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ main.cpp -I. \
