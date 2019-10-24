@@ -434,7 +434,7 @@ int main(int argc, char *argv[]) {
         // Initial publish for "off"
         top.publish(std::move("OFF"));
 
-        while (true) {
+        while (!exit_gracefully) {
             cv::Mat source_frame;
 
             auto t0 = std::chrono::high_resolution_clock::now();
@@ -471,13 +471,13 @@ int main(int argc, char *argv[]) {
             // Main sync point:
             // in the true Async mode, we start the NEXT infer request while waiting for the CURRENT to complete
             // in the regular mode, we start the CURRENT request and wait for its completion
-            cout << async_infer_request_curr[camera_index] << endl;
-            async_infer_request_curr[camera_index]->StartAsync();
-            cout << async_infer_request_curr[camera_index] << endl;
+            // cout << async_infer_request_curr[camera_index] << endl;
+            // async_infer_request_curr[camera_index]->StartAsync();
+            // cout << async_infer_request_curr[camera_index] << endl;
 
             bool has_people_in_frame = false;
 
-            if (OK == async_infer_request_curr[camera_index]->Wait(IInferRequest::WaitMode::RESULT_READY)) {
+            if (OK == async_infer_request_curr[camera_index]->Wait(IInferRequest::WaitMode::STATUS_ONLY)) {
                 t1 = std::chrono::high_resolution_clock::now();
                 ms detection = std::chrono::duration_cast<ms>(t1 - t0);
 
@@ -551,6 +551,8 @@ int main(int argc, char *argv[]) {
                                       cv::Point2f(static_cast<float>(object.xmax), static_cast<float>(object.ymax)), cv::Scalar(0, 0, 255));
                     }
                 }
+
+                async_infer_request_curr[camera_index]->StartAsync();
             }
             if (!FLAGS_no_show) {
                 cv::imshow(camera_names[camera_index], frame);
@@ -589,12 +591,16 @@ int main(int argc, char *argv[]) {
             next_frame = cv::Mat();
 
             const int key = cv::waitKey(1);
-            if (27 == key)  // Esc
+            if (27 == key) {  // Esc
+                exit_gracefully = true;
                 break;
+            }
             if(exit_gracefully) {
                 break;
             }
         }
+
+        cv::destroyAllWindows();
 
         /** Showing performace results **/
         if (FLAGS_pc) {
