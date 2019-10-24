@@ -355,6 +355,10 @@ int main(int argc, char *argv[]) {
         ExecutableNetwork network = ie.LoadNetwork(netReader.getNetwork(), FLAGS_d);
 
         // -----------------------------------------------------------------------------------------------------
+        InferRequest::Ptr async_infer_request_curr[cameras.size()];
+        for (int i=0 ; i < cameras.size(); i++) {
+            async_infer_request_curr[i] = network.CreateInferRequestPtr();
+        }
 
         // We now fork for each camera, creating concurrent threads that all share the inference objects above
         pid_t pid;
@@ -411,7 +415,7 @@ int main(int argc, char *argv[]) {
         }
 
         // --------------------------- 5. Creating infer request -----------------------------------------------
-        InferRequest::Ptr async_infer_request_curr = network.CreateInferRequestPtr();
+        // InferRequest::Ptr async_infer_request_curr = network.CreateInferRequestPtr();
         // -----------------------------------------------------------------------------------------------------
 
         bool isLastFrame = false;
@@ -430,8 +434,6 @@ int main(int argc, char *argv[]) {
         // Initial publish for "off"
         top.publish(std::move("OFF"));
 
-        cout << "1: " << camera_names[camera_index] << std::endl;
-
         while (true) {
             cv::Mat source_frame;
 
@@ -447,8 +449,6 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            cout << "2: " << camera_names[camera_index] << std::endl;
-
             double crop_width = width - cameras_cr[camera_index] - cameras_cl[camera_index];
             double crop_height = height - cameras_ct[camera_index] - cameras_cb[camera_index];
 
@@ -462,7 +462,7 @@ int main(int argc, char *argv[]) {
             // Copy the data into new matrix
             croppedRef.copyTo(next_frame);
 
-            FrameToBlob(frame, async_infer_request_curr, inputName);
+            FrameToBlob(frame, async_infer_request_curr[camera_index], inputName);
 
             auto t1 = std::chrono::high_resolution_clock::now();
             ocv_decode_time = std::chrono::duration_cast<ms>(t1 - t0).count();
@@ -471,15 +471,13 @@ int main(int argc, char *argv[]) {
             // Main sync point:
             // in the true Async mode, we start the NEXT infer request while waiting for the CURRENT to complete
             // in the regular mode, we start the CURRENT request and wait for its completion
-            async_infer_request_curr->StartAsync();
-
-            cout << "3: " << camera_names[camera_index] << std::endl;
+            cout << async_infer_request_curr[camera_index] << endl;
+            async_infer_request_curr[camera_index]->StartAsync();
+            cout << async_infer_request_curr[camera_index] << endl;
 
             bool has_people_in_frame = false;
 
-            if (OK == async_infer_request_curr->Wait(IInferRequest::WaitMode::RESULT_READY)) {
-                cout << "3.5: " << camera_names[camera_index] << std::endl;
-
+            if (OK == async_infer_request_curr[camera_index]->Wait(IInferRequest::WaitMode::RESULT_READY)) {
                 t1 = std::chrono::high_resolution_clock::now();
                 ms detection = std::chrono::duration_cast<ms>(t1 - t0);
 
@@ -514,7 +512,7 @@ int main(int argc, char *argv[]) {
                 for (auto &output : outputInfo) {
                     auto output_name = output.first;
                     CNNLayerPtr layer = netReader.getNetwork().getLayerByName(output_name.c_str());
-                    Blob::Ptr blob = async_infer_request_curr->GetBlob(output_name);
+                    Blob::Ptr blob = async_infer_request_curr[camera_index]->GetBlob(output_name);
                     ParseYOLOV3Output(layer, blob, resized_im_h, resized_im_w, height, width, FLAGS_t, objects);
                 }
                 // Filtering overlapping boxes
@@ -554,8 +552,6 @@ int main(int argc, char *argv[]) {
                     }
                 }
             }
-            cout << "4: " << camera_names[camera_index] << std::endl;
-
             if (!FLAGS_no_show) {
                 cv::imshow(camera_names[camera_index], frame);
             }
@@ -598,13 +594,11 @@ int main(int argc, char *argv[]) {
             if(exit_gracefully) {
                 break;
             }
-
-            cout << "5: " << camera_names[camera_index] << std::endl;
         }
 
         /** Showing performace results **/
         if (FLAGS_pc) {
-            printPerformanceCounts(*async_infer_request_curr, std::cout, getFullDeviceName(ie, FLAGS_d));
+            printPerformanceCounts(*async_infer_request_curr[camera_index], std::cout, getFullDeviceName(ie, FLAGS_d));
         }
     }
     catch (const std::exception& error) {
