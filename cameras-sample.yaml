@@ -1,15 +1,15 @@
 cameras:
-  - input: http://testurl:8081
-    mqtt_topic: test_topic
+  - name: Front Door
+    input: http://192.168.1.52:8081
+    mqtt_topic: cameras/front_door/humans
     crop_top: 80
     crop_right: 150
     crop_bottom: 0
     crop_left: 0
-    tolerance: 0.3
-  - input: http://testurl2:8081
-    mqtt_topic: test_topic2
-    crop_top: 80
-    crop_right: 150
+  - name: Driveway
+    input: http://192.168.1.52:8082
+    mqtt_topic: cameras/front_door/driveway
+    crop_top: 0
+    crop_right: 0
     crop_bottom: 0
     crop_left: 0
-    tolerance: 0.3
