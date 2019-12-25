@@ -11,6 +11,7 @@ The goal of this tool is to allow monitoring of a security camera, and to active
 ```bash
 sudo apt-get install libssl-dev
 sudo apt-get install libgflags-dev
+sudo apt-get install build-essential gcc make cmake cmake-gui cmake-curses-gui
 
 cd ~/
 git clone https://github.com/eclipse/paho.mqtt.c.git
@@ -26,6 +27,16 @@ cd paho.mqtt.cpp/
 git checkout v1.1
 cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
 sudo cmake --build build/ --target install
+sudo ldconfig
+
+cd ~/
+git clone https://github.com/jbeder/yaml-cpp.git
+cd yaml-cpp/
+git checkout yaml-cpp-0.6.3
+mkdir build
+cd build
+cmake -DYAML_BUILD_SHARED_LIBS=ON ..
+sudo cmake --build ./ --target install
 sudo ldconfig
 ```
 
@@ -47,6 +58,7 @@ neural_security_system [OPTION]
 Options:
 
     -h                        Print a usage message.
+    -cameras "<path>"       Optional. Specify path to camera YAML config.
     -i "<path>"             Required. Path to a video file (specify "cam" to work with camera).
     -m "<path>"             Required. Path to an .xml file with a trained model.
       -l "<absolute_path>"  Optional. Required for CPU custom layers.Absolute path to a shared library with the layers implementation.
@@ -110,11 +122,11 @@ cp ~/neural_security_system/yolo_v3_tiny_changed.json ./
 Building YOLOv3 FP16 version:
 
 ```bash
-python3 convert_weights_pb.py --class_names coco.names \ 
-  --data_format NHWC --weights_file yolov3.weights \ 
+python3 convert_weights_pb.py --class_names coco.names \
+  --data_format NHWC --weights_file yolov3.weights \
   --output_graph frozen_yolov3_model.pb
-python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \ 
-  --input_model frozen_yolov3_model.pb \ 
+python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \
+  --input_model frozen_yolov3_model.pb \
   --tensorflow_use_custom_operations_config yolo_v3_changed.json \
   --input_shape [1,416,416,3] --data_type=FP16
 mv frozen_yolov3_model.xml ~/neural_security_system/models/yolov3/FP16/
@@ -124,11 +136,11 @@ cp coco.names ~/neural_security_system/models/yolov3/FP16/frozen_yolov3_model.la
 Building YOLOv3 FP32 version:
 
 ```bash
-python3 convert_weights_pb.py --class_names coco.names \ 
-  --data_format NHWC --weights_file yolov3.weights \ 
+python3 convert_weights_pb.py --class_names coco.names \
+  --data_format NHWC --weights_file yolov3.weights \
   --output_graph frozen_yolov3_model.pb
-python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \ 
-  --input_model frozen_yolov3_model.pb \ 
+python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \
+  --input_model frozen_yolov3_model.pb \
   --tensorflow_use_custom_operations_config yolo_v3_changed.json \
   --input_shape [1,416,416,3]
 mv frozen_yolov3_model.xml ~/neural_security_system/models/yolov3/FP32/
@@ -139,11 +151,11 @@ cp coco.names ~/neural_security_system/models/yolov3/FP32/frozen_yolov3_model.la
 Building Tiny YOLOv3 FP16 version:
 
 ```bash
-python3 convert_weights_pb.py --class_names coco.names \ 
-  --data_format NHWC --weights_file yolov3-tiny.weights \ 
+python3 convert_weights_pb.py --class_names coco.names \
+  --data_format NHWC --weights_file yolov3-tiny.weights \
   --output_graph frozen_tiny_yolov3_model.pb --tiny
-python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \ 
-  --input_model frozen_tiny_yolov3_model.pb \ 
+python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \
+  --input_model frozen_tiny_yolov3_model.pb \
   --tensorflow_use_custom_operations_config yolo_v3_tiny_changed.json \
   --input_shape [1,416,416,3] --data_type=FP16
 mv frozen_tiny_yolov3_model.xml ~/neural_security_system/models/tiny_yolov3/FP16/
@@ -154,11 +166,11 @@ cp coco.names ~/neural_security_system/models/tiny_yolov3/FP16/frozen_tiny_yolov
 Building Tiny YOLOv3 FP32 version:
 
 ```bash
-python3 convert_weights_pb.py --class_names coco.names \ 
-  --data_format NHWC --weights_file yolov3-tiny.weights \ 
+python3 convert_weights_pb.py --class_names coco.names \
+  --data_format NHWC --weights_file yolov3-tiny.weights \
   --output_graph frozen_tiny_yolov3_model.pb --tiny
-python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \ 
-  --input_model frozen_tiny_yolov3_model.pb \ 
+python3 ~/intel/openvino/deployment_tools/model_optimizer/mo_tf.py \
+  --input_model frozen_tiny_yolov3_model.pb \
   --tensorflow_use_custom_operations_config yolo_v3_tiny_changed.json \
   --input_shape [1,416,416,3]
 mv frozen_tiny_yolov3_model.xml ~/neural_security_system/models/tiny_yolov3/FP32/
