@@ -361,30 +361,30 @@ int main(int argc, char *argv[]) {
         }
 
         // We now fork for each camera, creating concurrent threads that all share the inference objects above
-        pid_t pid;
-        int i;
-        pid_t camera_pids[cameras.size()];
+        // pid_t pid;
+        // int i;
+        // pid_t camera_pids[cameras.size()];
 
-        cout << "My process id = " << getpid() << endl;
-        camera_pids[0] = getpid();
+        // cout << "My process id = " << getpid() << endl;
+        // camera_pids[0] = getpid();
 
-        for (i=0 ; i < cameras.size() - 1 ; i++) {
-            pid = fork();    // Fork
+        // for (i=0 ; i < cameras.size() - 1 ; i++) {
+        //     pid = fork();    // Fork
 
-            if ( pid ) {
-               break;        // Don't give the parent a chance to fork again
-            }
-            camera_pids[i + 1] = getpid();
+        //     if ( pid ) {
+        //        break;        // Don't give the parent a chance to fork again
+        //     }
+        //     camera_pids[i + 1] = getpid();
 
-            cout << "Child #" << getpid() << endl; // Child can keep going and fork once
-        }
+        //     cout << "Child #" << getpid() << endl; // Child can keep going and fork once
+        // }
 
-        int camera_index;
-        for (i=0 ; i < cameras.size(); i++) {
-            if(getpid() == camera_pids[i]) {
-                camera_index = i;
-            }
-        }
+        int camera_index = 0;
+        // for (i=0 ; i < cameras.size(); i++) {
+        //     if(getpid() == camera_pids[i]) {
+        //         camera_index = i;
+        //     }
+        // }
 
         // --------------------------- 6. Doing inference ------------------------------------------------------
         slog::info << "Start inference " << slog::endl;
@@ -394,24 +394,31 @@ int main(int argc, char *argv[]) {
         slog::info << "Reading input" << slog::endl;
         cv::VideoCapture cap;
 
+        cv::VideoCapture caps[cameras.size()];;
+        cv::Mat frames[cameras.size()];
+        size_t widths[cameras.size()];
+        size_t heights[cameras.size()];
+
         // cap.set(cv::CAP_PROP_BUFFERSIZE, 3);
 
-        cout << "Camera index: " << camera_index << endl;
+        for (std::size_t i=0;i<cameras.size();i++) {
+            cout << "Camera index: " << i << endl;
 
-        if (!((camera_inputs[camera_index] == "cam") ? cap.open(0) : cap.open(camera_inputs[camera_index].c_str()))) {
-            throw std::logic_error("Cannot open input file or camera: " + camera_inputs[camera_index]);
-        }
+            if (!((camera_inputs[i] == "cam") ? caps[i].open(0) : caps[i].open(camera_inputs[i].c_str()))) {
+                throw std::logic_error("Cannot open input file or camera: " + camera_inputs[i]);
+            }
 
-        // read input (video) frame
-        cv::Mat frame;  cap >> frame;
-        cv::Mat next_frame;
+            // read input (video) frame
+            caps[i] >> frames[i];
+            // cv::Mat next_frame;
 
-        const size_t width  = (size_t) cap.get(cv::CAP_PROP_FRAME_WIDTH);
-        const size_t height = (size_t) cap.get(cv::CAP_PROP_FRAME_HEIGHT);
+            widths[i]  = (size_t) caps[i].get(cv::CAP_PROP_FRAME_WIDTH);
+            heights[i] = (size_t) caps[i].get(cv::CAP_PROP_FRAME_HEIGHT);
 
-        if (!cap.grab()) {
-            throw std::logic_error("This demo supports only video (or camera) inputs !!! "
-                                   "Failed to get next frame from the " + camera_inputs[camera_index]);
+            if (!caps[i].grab()) {
+                throw std::logic_error("This demo supports only video (or camera) inputs !!! "
+                                       "Failed to get next frame from the " + camera_inputs[i]);
+            }
         }
 
         // --------------------------- 5. Creating infer request -----------------------------------------------
@@ -441,7 +448,7 @@ int main(int argc, char *argv[]) {
             // Here is the first asynchronous point:
             // in the Async mode, we capture frame to populate the NEXT infer request
             // in the regular mode, we capture frame to the CURRENT infer request
-            if (!cap.read(source_frame)) {
+            if (!caps[camera_index].read(source_frame)) {
                 if (source_frame.empty()) {
                     isLastFrame = true;  // end of video file
                 } else {
@@ -449,8 +456,8 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            double crop_width = width - cameras_cr[camera_index] - cameras_cl[camera_index];
-            double crop_height = height - cameras_ct[camera_index] - cameras_cb[camera_index];
+            double crop_width = widths[camera_index] - cameras_cr[camera_index] - cameras_cl[camera_index];
+            double crop_height = heights[camera_index] - cameras_ct[camera_index] - cameras_cb[camera_index];
 
             // Setup a rectangle to define your region of interest
             cv::Rect myROI(cameras_cl[camera_index], cameras_ct[camera_index], crop_width, crop_height);
@@ -460,9 +467,9 @@ int main(int argc, char *argv[]) {
             cv::Mat croppedRef(source_frame, myROI);
 
             // Copy the data into new matrix
-            croppedRef.copyTo(next_frame);
+            croppedRef.copyTo(frames[camera_index]);
 
-            FrameToBlob(frame, async_infer_request_curr[camera_index], inputName);
+            FrameToBlob(frames[camera_index], async_infer_request_curr[camera_index], inputName);
 
             auto t1 = std::chrono::high_resolution_clock::now();
             ocv_decode_time = std::chrono::duration_cast<ms>(t1 - t0).count();
@@ -489,17 +496,17 @@ int main(int argc, char *argv[]) {
                 std::ostringstream out;
                 out << "OpenCV cap/render time: " << std::fixed << std::setprecision(2)
                     << (ocv_decode_time + ocv_render_time) << " ms";
-                cv::putText(frame, out.str(), cv::Point2f(0, 25), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 255, 0));
+                cv::putText(frames[camera_index], out.str(), cv::Point2f(0, 25), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 255, 0));
                 out.str("");
                 out << "Wallclock time: ";
                 out << std::fixed << std::setprecision(2) << wall.count() << " ms (" << 1000.f / wall.count() << " fps)";
-                cv::putText(frame, out.str(), cv::Point2f(0, 50), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 0, 255));
+                cv::putText(frames[camera_index], out.str(), cv::Point2f(0, 50), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 0, 255));
 
                 out.str("");
                 out << "Detection time  : " << std::fixed << std::setprecision(2) << detection.count()
                     << " ms ("
                     << 1000.f / detection.count() << " fps)";
-                cv::putText(frame, out.str(), cv::Point2f(0, 75), cv::FONT_HERSHEY_TRIPLEX, 0.6,
+                cv::putText(frames[camera_index], out.str(), cv::Point2f(0, 75), cv::FONT_HERSHEY_TRIPLEX, 0.6,
                             cv::Scalar(255, 0, 0));
 
                 // ---------------------------Processing output blobs--------------------------------------------------
@@ -513,7 +520,7 @@ int main(int argc, char *argv[]) {
                     auto output_name = output.first;
                     CNNLayerPtr layer = netReader.getNetwork().getLayerByName(output_name.c_str());
                     Blob::Ptr blob = async_infer_request_curr[camera_index]->GetBlob(output_name);
-                    ParseYOLOV3Output(layer, blob, resized_im_h, resized_im_w, height, width, FLAGS_t, objects);
+                    ParseYOLOV3Output(layer, blob, resized_im_h, resized_im_w, heights[camera_index], widths[camera_index], FLAGS_t, objects);
                 }
                 // Filtering overlapping boxes
                 std::sort(objects.begin(), objects.end(), std::greater<DetectionObject>());
@@ -542,19 +549,19 @@ int main(int argc, char *argv[]) {
                         /** Drawing only objects when >confidence_threshold probability **/
                         std::ostringstream conf;
                         conf << ":" << std::fixed << std::setprecision(3) << confidence;
-                        cv::putText(frame,
+                        cv::putText(frames[camera_index],
                                 (label < static_cast<int>(labels.size()) ?
                                         labels[label] : std::string("label #") + std::to_string(label)) + conf.str(),
                                     cv::Point2f(static_cast<float>(object.xmin), static_cast<float>(object.ymin - 5)), cv::FONT_HERSHEY_COMPLEX_SMALL, 1,
                                     cv::Scalar(0, 0, 255));
-                        cv::rectangle(frame, cv::Point2f(static_cast<float>(object.xmin), static_cast<float>(object.ymin)),
+                        cv::rectangle(frames[camera_index], cv::Point2f(static_cast<float>(object.xmin), static_cast<float>(object.ymin)),
                                       cv::Point2f(static_cast<float>(object.xmax), static_cast<float>(object.ymax)), cv::Scalar(0, 0, 255));
                     }
                 }
             }
 
             if (!FLAGS_no_show) {
-                cv::imshow(camera_names[camera_index], frame);
+                cv::imshow(camera_names[camera_index], frames[camera_index]);
             }
 
             if(has_people_in_frame && !humans_detected) {
@@ -586,8 +593,13 @@ int main(int argc, char *argv[]) {
 
             // Final point:
             // in the truly Async mode, we swap the NEXT and CURRENT requests for the next iteration
-            frame = next_frame;
-            next_frame = cv::Mat();
+            // frame = next_frame;
+            // next_frame = cv::Mat();
+
+            // camera_index++;
+            // if(camera_index >= cameras.size()) {
+            //     camera_index = 0;
+            // }
 
             const int key = cv::waitKey(1);
             if (27 == key) {  // Esc
