@@ -128,6 +128,10 @@ static const char async_message[] = "Optional. Start program in async mode.";
 
 DEFINE_bool(async, false, async_message);
 
+static const char cameras_message[] = "Optional. Specify path to camera YAML config.";
+
+DEFINE_string(cameras, "", cameras_message);
+
 /**
 * \brief This function shows a help message
 */
@@ -137,6 +141,7 @@ static void showUsage() {
     std::cout << "Options:" << std::endl;
     std::cout << std::endl;
     std::cout << "    -h                        " << help_message << std::endl;
+    std::cout << "    -cameras \"<path>\"       " << cameras_message << std::endl;
     std::cout << "    -i \"<path>\"               " << video_message << std::endl;
     std::cout << "    -m \"<path>\"               " << model_message << std::endl;
     std::cout << "      -l \"<absolute_path>\"    " << custom_cpu_library_message << std::endl;

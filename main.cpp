@@ -68,8 +68,14 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
     }
     slog::info << "Parsing input parameters" << slog::endl;
 
-    if (FLAGS_i.empty()) {
-        throw std::logic_error("Parameter -i is not set");
+    if(FLAGS_cameras.empty()) {
+        if (FLAGS_i.empty()) {
+            throw std::logic_error("Parameter -i is not set");
+        }
+
+        if (FLAGS_tp.empty()) {
+            throw std::logic_error("Parameter -tp is not set");
+        }
     }
 
     if (FLAGS_m.empty()) {
@@ -86,10 +92,6 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
 
     if (FLAGS_p.empty()) {
         throw std::logic_error("Parameter -p is not set");
-    }
-
-    if (FLAGS_tp.empty()) {
-        throw std::logic_error("Parameter -tp is not set");
     }
 
     return true;
@@ -216,37 +218,65 @@ int main(int argc, char *argv[]) {
     signal(SIGTERM, signalHandler);
 
     try {
-        YAML::Node config = YAML::LoadFile("cameras-sample.yaml");
-
-        const YAML::Node& cameras = config["cameras"];
-
-        std::string camera_names[cameras.size()];
-        std::string camera_inputs[cameras.size()];
-        std::string camera_topics[cameras.size()];
-        int cameras_ct[cameras.size()];
-        int cameras_cr[cameras.size()];
-        int cameras_cb[cameras.size()];
-        int cameras_cl[cameras.size()];
-
-        for (std::size_t i=0;i<cameras.size();i++) {
-            const YAML::Node camera = cameras[i];
-
-            camera_names[i] = camera["name"].as<std::string>();
-            camera_inputs[i] = camera["input"].as<std::string>();
-            camera_topics[i] = camera["mqtt_topic"].as<std::string>();
-            cameras_ct[i] = camera["crop_top"].as<int>();
-            cameras_cr[i] = camera["crop_right"].as<int>();
-            cameras_cb[i] = camera["crop_bottom"].as<int>();
-            cameras_cl[i] = camera["crop_left"].as<int>();
-
-            std::cout << "name: " << camera["name"].as<std::string>() << "\n";
-            std::cout << "input: " << camera["input"].as<std::string>() << "\n";
-            std::cout << "mqtt_topic: " << camera["mqtt_topic"].as<std::string>() << "\n\n";
-        }
+        uint num_cameras;
 
         // ------------------------------ Parsing and validating the input arguments ---------------------------------
         if (!ParseAndCheckCommandLine(argc, argv)) {
             return 0;
+        }
+
+        YAML::Node config;
+
+        if(FLAGS_cameras != "") {
+            config = YAML::LoadFile(FLAGS_cameras);
+
+            num_cameras = config["cameras"].size();
+        } else {
+            num_cameras = 1;
+        }
+
+        std::string camera_names[num_cameras];
+        std::string camera_inputs[num_cameras];
+        std::string camera_topics[num_cameras];
+        int cameras_ct[num_cameras];
+        int cameras_cr[num_cameras];
+        int cameras_cb[num_cameras];
+        int cameras_cl[num_cameras];
+
+        if(FLAGS_cameras != "") {
+            std::cout << "Initialize camera config from yaml: " << FLAGS_cameras << "\n\n";
+
+            const YAML::Node& cameras = config["cameras"];
+
+            for (std::size_t i=0;i<num_cameras;i++) {
+                const YAML::Node camera = cameras[i];
+
+                camera_names[i] = camera["name"].as<std::string>();
+                camera_inputs[i] = camera["input"].as<std::string>();
+                camera_topics[i] = camera["mqtt_topic"].as<std::string>();
+                cameras_ct[i] = camera["crop_top"].as<int>();
+                cameras_cr[i] = camera["crop_right"].as<int>();
+                cameras_cb[i] = camera["crop_bottom"].as<int>();
+                cameras_cl[i] = camera["crop_left"].as<int>();
+
+                std::cout << "name: " << camera["name"].as<std::string>() << "\n";
+                std::cout << "input: " << camera["input"].as<std::string>() << "\n";
+                std::cout << "mqtt_topic: " << camera["mqtt_topic"].as<std::string>() << "\n\n";
+            }
+        } else {
+            std::cout << "Initialize camera config from arguments: " << "\n\n";
+
+            camera_names[0] = "Camera";
+            camera_inputs[0] = FLAGS_i;
+            camera_topics[0] = FLAGS_tp;
+            cameras_ct[0] = FLAGS_ct;
+            cameras_cr[0] = FLAGS_cr;
+            cameras_cb[0] = FLAGS_cb;
+            cameras_cl[0] = FLAGS_cl;
+
+            std::cout << "name: " << camera_names[0] << "\n";
+            std::cout << "input: " << camera_inputs[0] << "\n";
+            std::cout << "mqtt_topic: " << camera_topics[0] << "\n\n";
         }
 
         string address = FLAGS_mh;
@@ -355,12 +385,12 @@ int main(int argc, char *argv[]) {
         ExecutableNetwork network = ie.LoadNetwork(netReader.getNetwork(), FLAGS_d);
 
         // -----------------------------------------------------------------------------------------------------
-        InferRequest::Ptr async_infer_request_curr[cameras.size()];
-        for (int i=0 ; i < cameras.size(); i++) {
+        InferRequest::Ptr async_infer_request_curr[num_cameras];
+        for (uint i=0 ; i < num_cameras; i++) {
             async_infer_request_curr[i] = network.CreateInferRequestPtr();
         }
 
-        int camera_index = 0;
+        uint camera_index = 0;
 
         // --------------------------- 6. Doing inference ------------------------------------------------------
         slog::info << "Start inference " << slog::endl;
@@ -370,13 +400,13 @@ int main(int argc, char *argv[]) {
         slog::info << "Reading input" << slog::endl;
         cv::VideoCapture cap;
 
-        cv::VideoCapture caps[cameras.size()];;
-        cv::Mat frames[cameras.size()];
-        size_t widths[cameras.size()];
-        size_t heights[cameras.size()];
+        cv::VideoCapture caps[num_cameras];;
+        cv::Mat frames[num_cameras];
+        size_t widths[num_cameras];
+        size_t heights[num_cameras];
 
 
-        for (std::size_t i=0;i<cameras.size();i++) {
+        for (std::size_t i=0;i<num_cameras;i++) {
             cout << "Camera index: " << i << endl;
 
             if (!((camera_inputs[i] == "cam") ? caps[i].open(0) : caps[i].open(camera_inputs[i].c_str()))) {
@@ -404,16 +434,16 @@ int main(int argc, char *argv[]) {
         bool isLastFrame = false;
 
         typedef std::chrono::duration<double, std::ratio<1, 1000>> ms;
-        std::chrono::time_point<std::chrono::high_resolution_clock> wallclock[cameras.size()];
-        std::chrono::time_point<std::chrono::high_resolution_clock> t0[cameras.size()];
-        std::chrono::time_point<std::chrono::high_resolution_clock> t1[cameras.size()];
-        double ocv_decode_time[cameras.size()];
-        double ocv_render_time[cameras.size()];
+        std::chrono::time_point<std::chrono::high_resolution_clock> wallclock[num_cameras];
+        std::chrono::time_point<std::chrono::high_resolution_clock> t0[num_cameras];
+        std::chrono::time_point<std::chrono::high_resolution_clock> t1[num_cameras];
+        double ocv_decode_time[num_cameras];
+        double ocv_render_time[num_cameras];
 
-        std::chrono::time_point<std::chrono::high_resolution_clock> time_humans_detected[cameras.size()];
-        bool humans_detected[cameras.size()];
+        std::chrono::time_point<std::chrono::high_resolution_clock> time_humans_detected[num_cameras];
+        bool humans_detected[num_cameras];
 
-        for (std::size_t i=0;i<cameras.size();i++) {
+        for (std::size_t i=0;i<num_cameras;i++) {
             wallclock[i] = std::chrono::high_resolution_clock::now();
             t0[i] = std::chrono::high_resolution_clock::now();
             t1[i] = std::chrono::high_resolution_clock::now();
@@ -426,8 +456,8 @@ int main(int argc, char *argv[]) {
 
         // Create a topic object. This is a conventience since we will
         // repeatedly publish messages with the same parameters.
-        mqtt::topic::ptr_t topics[cameras.size()];
-        for (std::size_t i=0;i<cameras.size();i++) {
+        mqtt::topic::ptr_t topics[num_cameras];
+        for (std::size_t i=0;i<num_cameras;i++) {
             topics[i] = mqtt::topic::create(cli, camera_topics[i], QOS, true);
 
             // Initial publish for "off"
@@ -475,7 +505,7 @@ int main(int argc, char *argv[]) {
             async_infer_request_curr[camera_index]->StartAsync();
 
             camera_index++;
-            if(camera_index >= cameras.size()) {
+            if(camera_index >= num_cameras) {
                 camera_index = 0;
                 all_cameras_started = true;
             }
