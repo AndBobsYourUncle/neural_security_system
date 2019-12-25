@@ -404,11 +404,25 @@ int main(int argc, char *argv[]) {
         bool isLastFrame = false;
 
         typedef std::chrono::duration<double, std::ratio<1, 1000>> ms;
-        auto wallclock = std::chrono::high_resolution_clock::now();
-        double ocv_decode_time = 0, ocv_render_time = 0;
+        std::chrono::time_point<std::chrono::high_resolution_clock> wallclock[cameras.size()];
+        std::chrono::time_point<std::chrono::high_resolution_clock> t0[cameras.size()];
+        std::chrono::time_point<std::chrono::high_resolution_clock> t1[cameras.size()];
+        double ocv_decode_time[cameras.size()];
+        double ocv_render_time[cameras.size()];
 
-        auto time_humans_detected = std::chrono::high_resolution_clock::now();
-        bool humans_detected = false;
+        std::chrono::time_point<std::chrono::high_resolution_clock> time_humans_detected[cameras.size()];
+        bool humans_detected[cameras.size()];
+
+        for (std::size_t i=0;i<cameras.size();i++) {
+            wallclock[i] = std::chrono::high_resolution_clock::now();
+            t0[i] = std::chrono::high_resolution_clock::now();
+            t1[i] = std::chrono::high_resolution_clock::now();
+            ocv_decode_time[i] = 0;
+            ocv_render_time[i] = 0;
+
+            time_humans_detected[i] = std::chrono::high_resolution_clock::now();
+            humans_detected[i] = false;
+        }
 
         // Create a topic object. This is a conventience since we will
         // repeatedly publish messages with the same parameters.
@@ -421,14 +435,12 @@ int main(int argc, char *argv[]) {
         mqtt::topic current_topic(*topics[camera_index]);
         current_topic.publish(std::move("OFF"));
 
-        // topics[camera_index].publish(std::move("OFF"));
-
         bool all_cameras_started = false;
 
         while (!exit_gracefully) {
             cv::Mat source_frame;
 
-            auto t0 = std::chrono::high_resolution_clock::now();
+            t0[camera_index] = std::chrono::high_resolution_clock::now();
             // Here is the first asynchronous point:
             // in the Async mode, we capture frame to populate the NEXT infer request
             // in the regular mode, we capture frame to the CURRENT infer request
@@ -455,16 +467,12 @@ int main(int argc, char *argv[]) {
 
             FrameToBlob(frames[camera_index], async_infer_request_curr[camera_index], inputName);
 
-            auto t1 = std::chrono::high_resolution_clock::now();
-            ocv_decode_time = std::chrono::duration_cast<ms>(t1 - t0).count();
+            t1[camera_index] = std::chrono::high_resolution_clock::now();
+            ocv_decode_time[camera_index] = std::chrono::duration_cast<ms>(t1[camera_index] - t0[camera_index]).count();
 
-            t0 = std::chrono::high_resolution_clock::now();
-            // Main sync point:
-            // in the true Async mode, we start the NEXT infer request while waiting for the CURRENT to complete
-            // in the regular mode, we start the CURRENT request and wait for its completion
-            // cout << async_infer_request_curr[camera_index] << endl;
+            t0[camera_index] = std::chrono::high_resolution_clock::now();
+
             async_infer_request_curr[camera_index]->StartAsync();
-            // cout << async_infer_request_curr[camera_index] << endl;
 
             camera_index++;
             if(camera_index >= cameras.size()) {
@@ -479,17 +487,17 @@ int main(int argc, char *argv[]) {
             bool has_people_in_frame = false;
 
             if (OK == async_infer_request_curr[camera_index]->Wait(IInferRequest::WaitMode::RESULT_READY)) {
-                t1 = std::chrono::high_resolution_clock::now();
-                ms detection = std::chrono::duration_cast<ms>(t1 - t0);
+                t1[camera_index] = std::chrono::high_resolution_clock::now();
+                ms detection = std::chrono::duration_cast<ms>(t1[camera_index] - t0[camera_index]);
 
-                t0 = std::chrono::high_resolution_clock::now();
-                ms wall = std::chrono::duration_cast<ms>(t0 - wallclock);
-                wallclock = t0;
+                t0[camera_index] = std::chrono::high_resolution_clock::now();
+                ms wall = std::chrono::duration_cast<ms>(t0[camera_index] - wallclock[camera_index]);
+                wallclock[camera_index] = t0[camera_index];
 
-                t0 = std::chrono::high_resolution_clock::now();
+                t0[camera_index] = std::chrono::high_resolution_clock::now();
                 std::ostringstream out;
                 out << "OpenCV cap/render time: " << std::fixed << std::setprecision(2)
-                    << (ocv_decode_time + ocv_render_time) << " ms";
+                    << (ocv_decode_time[camera_index] + ocv_render_time[camera_index]) << " ms";
                 cv::putText(frames[camera_index], out.str(), cv::Point2f(0, 25), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 255, 0));
                 out.str("");
                 out << "Wallclock time: ";
@@ -558,42 +566,32 @@ int main(int argc, char *argv[]) {
                 cv::imshow(camera_names[camera_index], frames[camera_index]);
             }
 
-            if(has_people_in_frame && !humans_detected) {
-                humans_detected = true;
+            if(has_people_in_frame && !humans_detected[camera_index]) {
+                humans_detected[camera_index] = true;
                 current_topic.publish(std::move("ON"));
             }
 
             if(has_people_in_frame) {
-                time_humans_detected = std::chrono::high_resolution_clock::now();
+                time_humans_detected[camera_index] = std::chrono::high_resolution_clock::now();
             }
 
-            if(!has_people_in_frame && humans_detected) {
+            if(!has_people_in_frame && humans_detected[camera_index]) {
                 auto time_no_humans = std::chrono::high_resolution_clock::now();
 
-                ms time_since_humans = std::chrono::duration_cast<ms>(time_no_humans - time_humans_detected);
+                ms time_since_humans = std::chrono::duration_cast<ms>(time_no_humans - time_humans_detected[camera_index]);
 
                 if(time_since_humans.count() > (FLAGS_to * 1000)) {
-                    humans_detected = false;
+                    humans_detected[camera_index] = false;
                     current_topic.publish(std::move("OFF"));
                 }
             }
 
-            t1 = std::chrono::high_resolution_clock::now();
-            ocv_render_time = std::chrono::duration_cast<ms>(t1 - t0).count();
+            t1[camera_index] = std::chrono::high_resolution_clock::now();
+            ocv_render_time[camera_index] = std::chrono::duration_cast<ms>(t1[camera_index] - t0[camera_index]).count();
 
             if (isLastFrame) {
                 break;
             }
-
-            // Final point:
-            // in the truly Async mode, we swap the NEXT and CURRENT requests for the next iteration
-            // frame = next_frame;
-            // next_frame = cv::Mat();
-
-            // camera_index++;
-            // if(camera_index >= cameras.size()) {
-            //     camera_index = 0;
-            // }
 
             const int key = cv::waitKey(1);
             if (27 == key) {  // Esc
