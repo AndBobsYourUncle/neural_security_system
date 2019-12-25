@@ -360,31 +360,7 @@ int main(int argc, char *argv[]) {
             async_infer_request_curr[i] = network.CreateInferRequestPtr();
         }
 
-        // We now fork for each camera, creating concurrent threads that all share the inference objects above
-        // pid_t pid;
-        // int i;
-        // pid_t camera_pids[cameras.size()];
-
-        // cout << "My process id = " << getpid() << endl;
-        // camera_pids[0] = getpid();
-
-        // for (i=0 ; i < cameras.size() - 1 ; i++) {
-        //     pid = fork();    // Fork
-
-        //     if ( pid ) {
-        //        break;        // Don't give the parent a chance to fork again
-        //     }
-        //     camera_pids[i + 1] = getpid();
-
-        //     cout << "Child #" << getpid() << endl; // Child can keep going and fork once
-        // }
-
         int camera_index = 0;
-        // for (i=0 ; i < cameras.size(); i++) {
-        //     if(getpid() == camera_pids[i]) {
-        //         camera_index = i;
-        //     }
-        // }
 
         // --------------------------- 6. Doing inference ------------------------------------------------------
         slog::info << "Start inference " << slog::endl;
@@ -399,7 +375,6 @@ int main(int argc, char *argv[]) {
         size_t widths[cameras.size()];
         size_t heights[cameras.size()];
 
-        // cap.set(cv::CAP_PROP_BUFFERSIZE, 3);
 
         for (std::size_t i=0;i<cameras.size();i++) {
             cout << "Camera index: " << i << endl;
@@ -408,9 +383,10 @@ int main(int argc, char *argv[]) {
                 throw std::logic_error("Cannot open input file or camera: " + camera_inputs[i]);
             }
 
+            // caps[i].set(cv::CAP_PROP_BUFFERSIZE, 3);
+
             // read input (video) frame
             caps[i] >> frames[i];
-            // cv::Mat next_frame;
 
             widths[i]  = (size_t) caps[i].get(cv::CAP_PROP_FRAME_WIDTH);
             heights[i] = (size_t) caps[i].get(cv::CAP_PROP_FRAME_HEIGHT);
@@ -436,10 +412,18 @@ int main(int argc, char *argv[]) {
 
         // Create a topic object. This is a conventience since we will
         // repeatedly publish messages with the same parameters.
-        mqtt::topic top(cli, camera_topics[camera_index], QOS, true);
+        mqtt::topic::ptr_t topics[cameras.size()];
+        for (std::size_t i=0;i<cameras.size();i++) {
+            topics[i] = mqtt::topic::create(cli, camera_topics[i], QOS, true);
+        }
 
         // Initial publish for "off"
-        top.publish(std::move("OFF"));
+        mqtt::topic current_topic(*topics[camera_index]);
+        current_topic.publish(std::move("OFF"));
+
+        // topics[camera_index].publish(std::move("OFF"));
+
+        bool all_cameras_started = false;
 
         while (!exit_gracefully) {
             cv::Mat source_frame;
@@ -481,6 +465,16 @@ int main(int argc, char *argv[]) {
             // cout << async_infer_request_curr[camera_index] << endl;
             async_infer_request_curr[camera_index]->StartAsync();
             // cout << async_infer_request_curr[camera_index] << endl;
+
+            camera_index++;
+            if(camera_index >= cameras.size()) {
+                camera_index = 0;
+                all_cameras_started = true;
+            }
+
+            if(!all_cameras_started) {
+                continue;
+            }
 
             bool has_people_in_frame = false;
 
@@ -566,7 +560,7 @@ int main(int argc, char *argv[]) {
 
             if(has_people_in_frame && !humans_detected) {
                 humans_detected = true;
-                top.publish(std::move("ON"));
+                current_topic.publish(std::move("ON"));
             }
 
             if(has_people_in_frame) {
@@ -580,7 +574,7 @@ int main(int argc, char *argv[]) {
 
                 if(time_since_humans.count() > (FLAGS_to * 1000)) {
                     humans_detected = false;
-                    top.publish(std::move("OFF"));
+                    current_topic.publish(std::move("OFF"));
                 }
             }
 
