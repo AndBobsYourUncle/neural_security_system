@@ -18,6 +18,8 @@
 #include <string>
 #include <algorithm>
 #include <iterator>
+#include <stdio.h>
+#include <unistd.h>
 
 #include <inference_engine.hpp>
 
@@ -37,6 +39,8 @@ using namespace std;
 using namespace InferenceEngine;
 
 #include "mqtt/async_client.h"
+
+#include "yaml-cpp/yaml.h"
 
 const int    QOS = 1;
 
@@ -64,8 +68,14 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
     }
     slog::info << "Parsing input parameters" << slog::endl;
 
-    if (FLAGS_i.empty()) {
-        throw std::logic_error("Parameter -i is not set");
+    if(FLAGS_cameras.empty()) {
+        if (FLAGS_i.empty()) {
+            throw std::logic_error("Parameter -i is not set");
+        }
+
+        if (FLAGS_tp.empty()) {
+            throw std::logic_error("Parameter -tp is not set");
+        }
     }
 
     if (FLAGS_m.empty()) {
@@ -82,10 +92,6 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
 
     if (FLAGS_p.empty()) {
         throw std::logic_error("Parameter -p is not set");
-    }
-
-    if (FLAGS_tp.empty()) {
-        throw std::logic_error("Parameter -tp is not set");
     }
 
     return true;
@@ -212,9 +218,65 @@ int main(int argc, char *argv[]) {
     signal(SIGTERM, signalHandler);
 
     try {
+        uint num_cameras;
+
         // ------------------------------ Parsing and validating the input arguments ---------------------------------
         if (!ParseAndCheckCommandLine(argc, argv)) {
             return 0;
+        }
+
+        YAML::Node config;
+
+        if(FLAGS_cameras != "") {
+            config = YAML::LoadFile(FLAGS_cameras);
+
+            num_cameras = config["cameras"].size();
+        } else {
+            num_cameras = 1;
+        }
+
+        std::string camera_names[num_cameras];
+        std::string camera_inputs[num_cameras];
+        std::string camera_topics[num_cameras];
+        int cameras_ct[num_cameras];
+        int cameras_cr[num_cameras];
+        int cameras_cb[num_cameras];
+        int cameras_cl[num_cameras];
+
+        if(FLAGS_cameras != "") {
+            std::cout << "Initialize camera config from yaml: " << FLAGS_cameras << "\n\n";
+
+            const YAML::Node& cameras = config["cameras"];
+
+            for (std::size_t i=0;i<num_cameras;i++) {
+                const YAML::Node camera = cameras[i];
+
+                camera_names[i] = camera["name"].as<std::string>();
+                camera_inputs[i] = camera["input"].as<std::string>();
+                camera_topics[i] = camera["mqtt_topic"].as<std::string>();
+                cameras_ct[i] = camera["crop_top"].as<int>();
+                cameras_cr[i] = camera["crop_right"].as<int>();
+                cameras_cb[i] = camera["crop_bottom"].as<int>();
+                cameras_cl[i] = camera["crop_left"].as<int>();
+
+                std::cout << "name: " << camera["name"].as<std::string>() << "\n";
+                std::cout << "input: " << camera["input"].as<std::string>() << "\n";
+                std::cout << "mqtt_topic: " << camera["mqtt_topic"].as<std::string>() << "\n\n";
+            }
+        } else {
+            std::cout << "Initialize camera config from arguments: " << "\n\n";
+
+            camera_names[0] = "Camera";
+            camera_inputs[0] = FLAGS_i;
+            camera_topics[0] = FLAGS_tp;
+            cameras_ct[0] = FLAGS_ct;
+            cameras_cr[0] = FLAGS_cr;
+            cameras_cb[0] = FLAGS_cb;
+            cameras_cl[0] = FLAGS_cl;
+
+            std::cout << "name: " << camera_names[0] << "\n";
+            std::cout << "input: " << camera_inputs[0] << "\n";
+            std::cout << "mqtt_topic: " << camera_topics[0] << "\n\n";
         }
 
         string address = FLAGS_mh;
@@ -228,42 +290,13 @@ int main(int argc, char *argv[]) {
         connOpts.set_user_name(FLAGS_u);
         connOpts.set_password(FLAGS_p);
 
-        // Create a topic object. This is a conventience since we will
-        // repeatedly publish messages with the same parameters.
-        mqtt::topic top(cli, FLAGS_tp, QOS, true);
-
         // Connect to the MQTT broker
         cout << "Connecting to server '" << address << "'..." << flush;
         cli.connect(connOpts)->wait();
         cout << "OK\n" << endl;
 
-        // Initial publish for "off"
-        top.publish(std::move("OFF"));
-
         /** This demo covers a certain topology and cannot be generalized for any object detection **/
         std::cout << "InferenceEngine: " << GetInferenceEngineVersion() << std::endl;
-
-        slog::info << "Reading input" << slog::endl;
-        cv::VideoCapture cap;
-
-        // cap.set(cv::CAP_PROP_BUFFERSIZE, 3);
-
-        if (!((FLAGS_i == "cam") ? cap.open(0) : cap.open(FLAGS_i.c_str()))) {
-            throw std::logic_error("Cannot open input file or camera: " + FLAGS_i);
-        }
-
-        // read input (video) frame
-        cv::Mat frame;  cap >> frame;
-        cv::Mat next_frame;
-
-        const size_t width  = (size_t) cap.get(cv::CAP_PROP_FRAME_WIDTH);
-        const size_t height = (size_t) cap.get(cv::CAP_PROP_FRAME_HEIGHT);
-
-        if (!cap.grab()) {
-            throw std::logic_error("This demo supports only video (or camera) inputs !!! "
-                                   "Failed to get next frame from the " + FLAGS_i);
-        }
-        // -----------------------------------------------------------------------------------------------------
 
         // --------------------------- 1. Load inference engine -------------------------------------
         slog::info << "Loading Inference Engine" << slog::endl;
@@ -352,38 +385,96 @@ int main(int argc, char *argv[]) {
         ExecutableNetwork network = ie.LoadNetwork(netReader.getNetwork(), FLAGS_d);
 
         // -----------------------------------------------------------------------------------------------------
+        InferRequest::Ptr async_infer_request_curr[num_cameras];
+        for (uint i=0 ; i < num_cameras; i++) {
+            async_infer_request_curr[i] = network.CreateInferRequestPtr();
+        }
 
-        // --------------------------- 5. Creating infer request -----------------------------------------------
-        InferRequest::Ptr async_infer_request_next = network.CreateInferRequestPtr();
-        InferRequest::Ptr async_infer_request_curr = network.CreateInferRequestPtr();
-        // -----------------------------------------------------------------------------------------------------
+        uint camera_index = 0;
 
         // --------------------------- 6. Doing inference ------------------------------------------------------
         slog::info << "Start inference " << slog::endl;
 
+        std::cout << "To close the application, press 'CTRL+C' here or switch to the output window and press ESC key" << std::endl;
+
+        slog::info << "Reading input" << slog::endl;
+        cv::VideoCapture cap;
+
+        cv::VideoCapture caps[num_cameras];;
+        cv::Mat frames[num_cameras];
+        size_t widths[num_cameras];
+        size_t heights[num_cameras];
+
+
+        for (std::size_t i=0;i<num_cameras;i++) {
+            cout << "Camera index: " << i << endl;
+
+            if (!((camera_inputs[i] == "cam") ? caps[i].open(0) : caps[i].open(camera_inputs[i].c_str()))) {
+                throw std::logic_error("Cannot open input file or camera: " + camera_inputs[i]);
+            }
+
+            // caps[i].set(cv::CAP_PROP_BUFFERSIZE, 3);
+
+            // read input (video) frame
+            caps[i] >> frames[i];
+
+            widths[i]  = (size_t) caps[i].get(cv::CAP_PROP_FRAME_WIDTH);
+            heights[i] = (size_t) caps[i].get(cv::CAP_PROP_FRAME_HEIGHT);
+
+            if (!caps[i].grab()) {
+                throw std::logic_error("This demo supports only video (or camera) inputs !!! "
+                                       "Failed to get next frame from the " + camera_inputs[i]);
+            }
+        }
+
+        // --------------------------- 5. Creating infer request -----------------------------------------------
+        // InferRequest::Ptr async_infer_request_curr = network.CreateInferRequestPtr();
+        // -----------------------------------------------------------------------------------------------------
+
         bool isLastFrame = false;
-        bool isAsyncMode = FLAGS_async;
-        bool isModeChanged = false;  // set to TRUE when execution mode is changed (SYNC<->ASYNC)
 
         typedef std::chrono::duration<double, std::ratio<1, 1000>> ms;
-        auto total_t0 = std::chrono::high_resolution_clock::now();
-        auto wallclock = std::chrono::high_resolution_clock::now();
-        double ocv_decode_time = 0, ocv_render_time = 0;
+        std::chrono::time_point<std::chrono::high_resolution_clock> wallclock[num_cameras];
+        std::chrono::time_point<std::chrono::high_resolution_clock> t0[num_cameras];
+        std::chrono::time_point<std::chrono::high_resolution_clock> t1[num_cameras];
+        double ocv_decode_time[num_cameras];
+        double ocv_render_time[num_cameras];
 
-        std::cout << "To close the application, press 'CTRL+C' here or switch to the output window and press ESC key" << std::endl;
-        std::cout << "To switch between sync/async modes, press TAB key in the output window" << std::endl;
+        std::chrono::time_point<std::chrono::high_resolution_clock> time_humans_detected[num_cameras];
+        bool humans_detected[num_cameras];
 
-        auto time_humans_detected = std::chrono::high_resolution_clock::now();
-        bool humans_detected = false;
+        for (std::size_t i=0;i<num_cameras;i++) {
+            wallclock[i] = std::chrono::high_resolution_clock::now();
+            t0[i] = std::chrono::high_resolution_clock::now();
+            t1[i] = std::chrono::high_resolution_clock::now();
+            ocv_decode_time[i] = 0;
+            ocv_render_time[i] = 0;
 
-        while (true) {
+            time_humans_detected[i] = std::chrono::high_resolution_clock::now();
+            humans_detected[i] = false;
+        }
+
+        // Create a topic object. This is a conventience since we will
+        // repeatedly publish messages with the same parameters.
+        mqtt::topic::ptr_t topics[num_cameras];
+        for (std::size_t i=0;i<num_cameras;i++) {
+            topics[i] = mqtt::topic::create(cli, camera_topics[i], QOS, true);
+
+            // Initial publish for "off"
+            mqtt::topic current_topic(*topics[camera_index]);
+            current_topic.publish(std::move("OFF"));
+        }
+
+        bool all_cameras_started = false;
+
+        while (!exit_gracefully) {
             cv::Mat source_frame;
 
-            auto t0 = std::chrono::high_resolution_clock::now();
+            t0[camera_index] = std::chrono::high_resolution_clock::now();
             // Here is the first asynchronous point:
             // in the Async mode, we capture frame to populate the NEXT infer request
             // in the regular mode, we capture frame to the CURRENT infer request
-            if (!cap.read(source_frame)) {
+            if (!caps[camera_index].read(source_frame)) {
                 if (source_frame.empty()) {
                     isLastFrame = true;  // end of video file
                 } else {
@@ -391,74 +482,64 @@ int main(int argc, char *argv[]) {
                 }
             }
 
-            double crop_width = width - FLAGS_cr - FLAGS_cl;
-            double crop_height = height - FLAGS_ct - FLAGS_cb;
+            double crop_width = widths[camera_index] - cameras_cr[camera_index] - cameras_cl[camera_index];
+            double crop_height = heights[camera_index] - cameras_ct[camera_index] - cameras_cb[camera_index];
 
             // Setup a rectangle to define your region of interest
-            cv::Rect myROI(FLAGS_cl, FLAGS_ct, crop_width, crop_height);
+            cv::Rect myROI(cameras_cl[camera_index], cameras_ct[camera_index], crop_width, crop_height);
 
             // Crop the full image to that image contained by the rectangle myROI
             // Note that this doesn't copy the data
             cv::Mat croppedRef(source_frame, myROI);
 
             // Copy the data into new matrix
-            croppedRef.copyTo(next_frame);
+            croppedRef.copyTo(frames[camera_index]);
 
-            if (isAsyncMode) {
-                if (isModeChanged) {
-                    FrameToBlob(frame, async_infer_request_curr, inputName);
-                }
-                if (!isLastFrame) {
-                    FrameToBlob(next_frame, async_infer_request_next, inputName);
-                }
-            } else if (!isModeChanged) {
-                FrameToBlob(frame, async_infer_request_curr, inputName);
+            FrameToBlob(frames[camera_index], async_infer_request_curr[camera_index], inputName);
+
+            t1[camera_index] = std::chrono::high_resolution_clock::now();
+            ocv_decode_time[camera_index] = std::chrono::duration_cast<ms>(t1[camera_index] - t0[camera_index]).count();
+
+            t0[camera_index] = std::chrono::high_resolution_clock::now();
+
+            async_infer_request_curr[camera_index]->StartAsync();
+
+            camera_index++;
+            if(camera_index >= num_cameras) {
+                camera_index = 0;
+                all_cameras_started = true;
             }
-            auto t1 = std::chrono::high_resolution_clock::now();
-            ocv_decode_time = std::chrono::duration_cast<ms>(t1 - t0).count();
 
-            t0 = std::chrono::high_resolution_clock::now();
-            // Main sync point:
-            // in the true Async mode, we start the NEXT infer request while waiting for the CURRENT to complete
-            // in the regular mode, we start the CURRENT request and wait for its completion
-            if (isAsyncMode) {
-                if (isModeChanged) {
-                    async_infer_request_curr->StartAsync();
-                }
-                if (!isLastFrame) {
-                    async_infer_request_next->StartAsync();
-                }
-            } else if (!isModeChanged) {
-                async_infer_request_curr->StartAsync();
+            if(!all_cameras_started) {
+                continue;
             }
 
             bool has_people_in_frame = false;
 
-            if (OK == async_infer_request_curr->Wait(IInferRequest::WaitMode::RESULT_READY)) {
-                t1 = std::chrono::high_resolution_clock::now();
-                ms detection = std::chrono::duration_cast<ms>(t1 - t0);
+            if (OK == async_infer_request_curr[camera_index]->Wait(IInferRequest::WaitMode::RESULT_READY)) {
+                t1[camera_index] = std::chrono::high_resolution_clock::now();
+                ms detection = std::chrono::duration_cast<ms>(t1[camera_index] - t0[camera_index]);
 
-                t0 = std::chrono::high_resolution_clock::now();
-                ms wall = std::chrono::duration_cast<ms>(t0 - wallclock);
-                wallclock = t0;
+                t0[camera_index] = std::chrono::high_resolution_clock::now();
+                ms wall = std::chrono::duration_cast<ms>(t0[camera_index] - wallclock[camera_index]);
+                wallclock[camera_index] = t0[camera_index];
 
-                t0 = std::chrono::high_resolution_clock::now();
+                t0[camera_index] = std::chrono::high_resolution_clock::now();
                 std::ostringstream out;
                 out << "OpenCV cap/render time: " << std::fixed << std::setprecision(2)
-                    << (ocv_decode_time + ocv_render_time) << " ms";
-                cv::putText(frame, out.str(), cv::Point2f(0, 25), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 255, 0));
+                    << (ocv_decode_time[camera_index] + ocv_render_time[camera_index]) << " ms";
+                cv::putText(frames[camera_index], out.str(), cv::Point2f(0, 25), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 255, 0));
                 out.str("");
-                out << "Wallclock time " << (isAsyncMode ? "(TRUE ASYNC):      " : "(SYNC, press Tab): ");
+                out << "Wallclock time: ";
                 out << std::fixed << std::setprecision(2) << wall.count() << " ms (" << 1000.f / wall.count() << " fps)";
-                cv::putText(frame, out.str(), cv::Point2f(0, 50), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 0, 255));
-                if (!isAsyncMode) {  // In the true async mode, there is no way to measure detection time directly
-                    out.str("");
-                    out << "Detection time  : " << std::fixed << std::setprecision(2) << detection.count()
-                        << " ms ("
-                        << 1000.f / detection.count() << " fps)";
-                    cv::putText(frame, out.str(), cv::Point2f(0, 75), cv::FONT_HERSHEY_TRIPLEX, 0.6,
-                                cv::Scalar(255, 0, 0));
-                }
+                cv::putText(frames[camera_index], out.str(), cv::Point2f(0, 50), cv::FONT_HERSHEY_TRIPLEX, 0.6, cv::Scalar(0, 0, 255));
+
+                out.str("");
+                out << "Detection time  : " << std::fixed << std::setprecision(2) << detection.count()
+                    << " ms ("
+                    << 1000.f / detection.count() << " fps)";
+                cv::putText(frames[camera_index], out.str(), cv::Point2f(0, 75), cv::FONT_HERSHEY_TRIPLEX, 0.6,
+                            cv::Scalar(255, 0, 0));
 
                 // ---------------------------Processing output blobs--------------------------------------------------
                 // Processing results of the CURRENT request
@@ -470,8 +551,8 @@ int main(int argc, char *argv[]) {
                 for (auto &output : outputInfo) {
                     auto output_name = output.first;
                     CNNLayerPtr layer = netReader.getNetwork().getLayerByName(output_name.c_str());
-                    Blob::Ptr blob = async_infer_request_curr->GetBlob(output_name);
-                    ParseYOLOV3Output(layer, blob, resized_im_h, resized_im_w, height, width, FLAGS_t, objects);
+                    Blob::Ptr blob = async_infer_request_curr[camera_index]->GetBlob(output_name);
+                    ParseYOLOV3Output(layer, blob, resized_im_h, resized_im_w, heights[camera_index], widths[camera_index], FLAGS_t, objects);
                 }
                 // Filtering overlapping boxes
                 std::sort(objects.begin(), objects.end(), std::greater<DetectionObject>());
@@ -500,78 +581,65 @@ int main(int argc, char *argv[]) {
                         /** Drawing only objects when >confidence_threshold probability **/
                         std::ostringstream conf;
                         conf << ":" << std::fixed << std::setprecision(3) << confidence;
-                        cv::putText(frame,
+                        cv::putText(frames[camera_index],
                                 (label < static_cast<int>(labels.size()) ?
                                         labels[label] : std::string("label #") + std::to_string(label)) + conf.str(),
                                     cv::Point2f(static_cast<float>(object.xmin), static_cast<float>(object.ymin - 5)), cv::FONT_HERSHEY_COMPLEX_SMALL, 1,
                                     cv::Scalar(0, 0, 255));
-                        cv::rectangle(frame, cv::Point2f(static_cast<float>(object.xmin), static_cast<float>(object.ymin)),
+                        cv::rectangle(frames[camera_index], cv::Point2f(static_cast<float>(object.xmin), static_cast<float>(object.ymin)),
                                       cv::Point2f(static_cast<float>(object.xmax), static_cast<float>(object.ymax)), cv::Scalar(0, 0, 255));
                     }
                 }
             }
+
+            mqtt::topic current_topic(*topics[camera_index]);
+
             if (!FLAGS_no_show) {
-                cv::imshow("Detection results", frame);
+                cv::imshow(camera_names[camera_index], frames[camera_index]);
             }
 
-            if(has_people_in_frame && !humans_detected) {
-                humans_detected = true;
-                top.publish(std::move("ON"));
+            if(has_people_in_frame && !humans_detected[camera_index]) {
+                humans_detected[camera_index] = true;
+                current_topic.publish(std::move("ON"));
             }
 
             if(has_people_in_frame) {
-                time_humans_detected = std::chrono::high_resolution_clock::now();
+                time_humans_detected[camera_index] = std::chrono::high_resolution_clock::now();
             }
 
-            if(!has_people_in_frame && humans_detected) {
+            if(!has_people_in_frame && humans_detected[camera_index]) {
                 auto time_no_humans = std::chrono::high_resolution_clock::now();
 
-                ms time_since_humans = std::chrono::duration_cast<ms>(time_no_humans - time_humans_detected);
+                ms time_since_humans = std::chrono::duration_cast<ms>(time_no_humans - time_humans_detected[camera_index]);
 
                 if(time_since_humans.count() > (FLAGS_to * 1000)) {
-                    humans_detected = false;
-                    top.publish(std::move("OFF"));
+                    humans_detected[camera_index] = false;
+                    current_topic.publish(std::move("OFF"));
                 }
             }
 
-            t1 = std::chrono::high_resolution_clock::now();
-            ocv_render_time = std::chrono::duration_cast<ms>(t1 - t0).count();
+            t1[camera_index] = std::chrono::high_resolution_clock::now();
+            ocv_render_time[camera_index] = std::chrono::duration_cast<ms>(t1[camera_index] - t0[camera_index]).count();
 
             if (isLastFrame) {
                 break;
             }
 
-            if (isModeChanged) {
-                isModeChanged = false;
-            }
-
-            // Final point:
-            // in the truly Async mode, we swap the NEXT and CURRENT requests for the next iteration
-            frame = next_frame;
-            next_frame = cv::Mat();
-            if (isAsyncMode) {
-                async_infer_request_curr.swap(async_infer_request_next);
-            }
-
             const int key = cv::waitKey(1);
-            if (27 == key)  // Esc
+            if (27 == key) {  // Esc
+                exit_gracefully = true;
                 break;
-            if (9 == key) {  // Tab
-                isAsyncMode ^= true;
-                isModeChanged = true;
             }
             if(exit_gracefully) {
                 break;
             }
         }
-        // -----------------------------------------------------------------------------------------------------
-        // auto total_t1 = std::chrono::high_resolution_clock::now();
-        // ms total = std::chrono::duration_cast<ms>(total_t1 - total_t0);
-        // std::cout << "Total Inference time: " << total.count() << std::endl;
+
+        cv::destroyAllWindows();
 
         /** Showing performace results **/
         if (FLAGS_pc) {
-            printPerformanceCounts(*async_infer_request_curr, std::cout, getFullDeviceName(ie, FLAGS_d));
+            printPerformanceCounts(*async_infer_request_curr[camera_index], std::cout, getFullDeviceName(ie, FLAGS_d));
         }
     }
     catch (const std::exception& error) {
