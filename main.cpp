@@ -429,11 +429,11 @@ int main(int argc, char *argv[]) {
         mqtt::topic::ptr_t topics[cameras.size()];
         for (std::size_t i=0;i<cameras.size();i++) {
             topics[i] = mqtt::topic::create(cli, camera_topics[i], QOS, true);
-        }
 
-        // Initial publish for "off"
-        mqtt::topic current_topic(*topics[camera_index]);
-        current_topic.publish(std::move("OFF"));
+            // Initial publish for "off"
+            mqtt::topic current_topic(*topics[camera_index]);
+            current_topic.publish(std::move("OFF"));
+        }
 
         bool all_cameras_started = false;
 
@@ -561,6 +561,8 @@ int main(int argc, char *argv[]) {
                     }
                 }
             }
+
+            mqtt::topic current_topic(*topics[camera_index]);
 
             if (!FLAGS_no_show) {
                 cv::imshow(camera_names[camera_index], frames[camera_index]);
