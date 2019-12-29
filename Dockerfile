@@ -1,4 +1,4 @@
-FROM ubuntu:16.04
+FROM ubuntu:18.04
 ENV http_proxy $HTTP_PROXY
 ENV https_proxy $HTTPS_PROXY
 ARG DOWNLOAD_LINK=http://registrationcenter-download.intel.com/akdlm/irc_nas/16057/l_openvino_toolkit_p_2019.3.376.tgz
@@ -62,26 +62,20 @@ RUN cd /usr && git clone https://github.com/jbeder/yaml-cpp.git && \
     cmake --build ./ --target install && \
     ldconfig
 
-RUN mkdir /usr/neural_security_system
-WORKDIR /usr/neural_security_system
-
-COPY . /usr/neural_security_system
-
-RUN /bin/bash -c "source $INSTALL_DIR/bin/setupvars.sh && make -B"
-
-RUN cp $INSTALL_DIR/deployment_tools/inference_engine/lib/intel64/libinference_engine.so /usr/neural_security_system/lib
-
 RUN pip3 install image
 
 RUN cd /usr && git clone https://github.com/mystic123/tensorflow-yolo-v3.git && \
     cd tensorflow-yolo-v3 && \
+    git checkout ed60b90 && \
     wget https://raw.githubusercontent.com/pjreddie/darknet/master/data/coco.names && \
     wget https://pjreddie.com/media/files/yolov3.weights && \
     wget https://pjreddie.com/media/files/yolov3-tiny.weights && \
-    cp /usr/neural_security_system/yolo_v3_changed.json ./ && \
-    cp /usr/neural_security_system/yolo_v3_tiny_changed.json ./
+    cp $INSTALL_DIR/deployment_tools/model_optimizer/extensions/front/tf/yolo_v3.json ./ && \
+    cp $INSTALL_DIR/deployment_tools/model_optimizer/extensions/front/tf/yolo_v3_tiny.json ./
 
-RUN mkdir /usr/neural_security_system/models/yolov3 && \
+RUN mkdir /usr/neural_security_system && \
+    mkdir /usr/neural_security_system/models && \
+    mkdir /usr/neural_security_system/models/yolov3 && \
     mkdir /usr/neural_security_system/models/yolov3/FP16
 
 RUN cd /usr/tensorflow-yolo-v3 && \
@@ -90,7 +84,7 @@ RUN cd /usr/tensorflow-yolo-v3 && \
       --output_graph frozen_yolov3_model.pb && \
     python3 $INSTALL_DIR/deployment_tools/model_optimizer/mo_tf.py \
       --input_model frozen_yolov3_model.pb \
-      --tensorflow_use_custom_operations_config yolo_v3_changed.json \
+      --tensorflow_use_custom_operations_config yolo_v3.json \
       --input_shape [1,416,416,3] --data_type=FP16 && \
     mv frozen_yolov3_model.xml /usr/neural_security_system/models/yolov3/FP16/ && \
     mv frozen_yolov3_model.bin /usr/neural_security_system/models/yolov3/FP16/ && \
@@ -104,7 +98,7 @@ RUN cd /usr/tensorflow-yolo-v3 && \
       --output_graph frozen_yolov3_model.pb && \
     python3 $INSTALL_DIR/deployment_tools/model_optimizer/mo_tf.py \
       --input_model frozen_yolov3_model.pb \
-      --tensorflow_use_custom_operations_config yolo_v3_changed.json \
+      --tensorflow_use_custom_operations_config yolo_v3.json \
       --input_shape [1,416,416,3] && \
     mv frozen_yolov3_model.xml /usr/neural_security_system/models/yolov3/FP32/ && \
     mv frozen_yolov3_model.bin /usr/neural_security_system/models/yolov3/FP32/ && \
@@ -119,7 +113,7 @@ RUN cd /usr/tensorflow-yolo-v3 && \
       --output_graph frozen_tiny_yolov3_model.pb --tiny && \
     python3 $INSTALL_DIR/deployment_tools/model_optimizer/mo_tf.py \
       --input_model frozen_tiny_yolov3_model.pb \
-      --tensorflow_use_custom_operations_config yolo_v3_tiny_changed.json \
+      --tensorflow_use_custom_operations_config yolo_v3_tiny.json \
       --input_shape [1,416,416,3] --data_type=FP16 && \
     mv frozen_tiny_yolov3_model.xml /usr/neural_security_system/models/tiny_yolov3/FP16/ && \
     mv frozen_tiny_yolov3_model.bin /usr/neural_security_system/models/tiny_yolov3/FP16/ && \
@@ -133,9 +127,18 @@ RUN cd /usr/tensorflow-yolo-v3 && \
       --output_graph frozen_tiny_yolov3_model.pb --tiny && \
     python3 $INSTALL_DIR/deployment_tools/model_optimizer/mo_tf.py \
       --input_model frozen_tiny_yolov3_model.pb \
-      --tensorflow_use_custom_operations_config yolo_v3_tiny_changed.json \
+      --tensorflow_use_custom_operations_config yolo_v3_tiny.json \
       --input_shape [1,416,416,3] && \
     mv frozen_tiny_yolov3_model.xml /usr/neural_security_system/models/tiny_yolov3/FP32/ && \
     mv frozen_tiny_yolov3_model.bin /usr/neural_security_system/models/tiny_yolov3/FP32/ && \
     cp coco.names /usr/neural_security_system/models/tiny_yolov3/FP32/frozen_tiny_yolov3_model.labels
 
+ENV INSTALL_DIR=$INSTALL_DIR
+
+WORKDIR /usr/neural_security_system
+
+COPY . /usr/neural_security_system
+
+RUN /bin/bash -c "source $INSTALL_DIR/bin/setupvars.sh && make -B"
+
+CMD [ "/usr/neural_security_system/start_neural_security_system.sh" ]
