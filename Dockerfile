@@ -147,6 +147,4 @@ COPY . /usr/neural_security_system
 
 RUN /bin/bash -c "source $INSTALL_DIR/bin/setupvars.sh && make -B"
 
-# ENTRYPOINT ["/bin/bash", "/usr/neural_security_system/signal-listener.sh"]
-
 CMD [ "/bin/bash", "-c", "/usr/neural_security_system/start_neural_security_system.sh" ]
