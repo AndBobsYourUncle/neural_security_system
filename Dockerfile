@@ -139,6 +139,10 @@ RUN pip3 install image && \
 
 ENV INSTALL_DIR=$INSTALL_DIR
 
+ENV THRESHOLD 0.5
+ENV IOU_THRESHOLD 0.4
+ENV HUMAN_TIMEOUT 5
+
 WORKDIR /usr/neural_security_system
 
 RUN touch /usr/neural_security_system/cameras.yaml
