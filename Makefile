@@ -32,7 +32,7 @@ neural_security_system:
             -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/samples/common/format_reader/ \
             -I$(INTEL_CVSDK_DIR)/opencv/include \
             -I/usr/local/include \
-            -I$(HOME)/inference_engine_samples_build/thirdparty/gflags/include \
+            -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/samples/build/thirdparty/gflags/include \
             -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/include \
             -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/include/cpp \
             -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/samples/extension \
