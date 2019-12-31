@@ -26,6 +26,15 @@ RUN mkdir $INSTALL_DIR/deployment_tools/inference_engine/samples/build && cd $IN
 WORKDIR $INSTALL_DIR/deployment_tools/model_optimizer/install_prerequisites
 RUN ./install_prerequisites.sh
 
+RUN apt-get update && apt-get install -y --no-install-recommends dh-autoreconf unzip && \
+    cd /tmp/ && \
+    wget https://github.com/libusb/libusb/archive/v1.0.22.zip && \
+    unzip v1.0.22.zip && cd libusb-1.0.22 && \
+    ./bootstrap.sh && \
+    ./configure --disable-udev --enable-shared && \
+    make -j4 && make install && \
+    rm -rf /tmp/*
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     libssl-dev \
@@ -138,4 +147,6 @@ COPY . /usr/neural_security_system
 
 RUN /bin/bash -c "source $INSTALL_DIR/bin/setupvars.sh && make -B"
 
-CMD [ "/usr/neural_security_system/start_neural_security_system.sh" ]
+# ENTRYPOINT ["/bin/bash", "/usr/neural_security_system/signal-listener.sh"]
+
+CMD [ "/bin/bash", "-c", "/usr/neural_security_system/start_neural_security_system.sh" ]
