@@ -132,6 +132,8 @@ ENV INSTALL_DIR=$INSTALL_DIR
 
 WORKDIR /usr/neural_security_system
 
+RUN touch /usr/neural_security_system/cameras.yaml
+
 COPY . /usr/neural_security_system
 
 RUN /bin/bash -c "source $INSTALL_DIR/bin/setupvars.sh && make -B"

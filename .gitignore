@@ -1,3 +1,4 @@
 .*
 !/.gitignore
 neural_security_system
+cameras.yaml
