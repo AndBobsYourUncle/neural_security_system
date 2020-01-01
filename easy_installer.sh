@@ -149,5 +149,4 @@ cd /usr
 rm -rf /usr/tensorflow-yolo-v3
 
 cd /home/$2/neural_security_system
-
-source $INSTALL_DIR/bin/setupvars.sh && make -B
+sudo chown -R $2 ./
