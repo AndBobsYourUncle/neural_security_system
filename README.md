@@ -49,6 +49,17 @@ cameras:
 
 Use the path to this file whever you save it to on the host machine for the `-v /home/nicholas/cameras.yaml:/usr/neural_security_system/cameras.yaml` portion of `docker run`.
 
+Also, if you’d like to mess with some of the other neural models provided in the image, you have all these available:
+
+```
+./models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.xml
+./models/tiny_yolov3/FP32/frozen_tiny_yolov3_model.xml
+./models/yolov3/FP16/frozen_yolov3_model.xml
+./models/yolov3/FP32/frozen_yolov3_model.xml
+```
+
+The “non-tiny” version is more accurate, but takes more resources. And the FP16 is faster than FP32, and you lose some precision. Running using the Neural Compute Stick, I just use the tiny FP16 version, and cap my FPS on the camera streams to 10 FPS. Seems to work fine with two cameras.
+
 # Instructions for Building
 
 * This version (master branch of repo) is verified to be working with a fresh install of Ubuntu 18.04 LTS Desktop with a download link to OpenVINO 2019-R3.1
