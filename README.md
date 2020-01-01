@@ -9,7 +9,7 @@ The goal of this tool is to allow monitoring of security cameras, and to activel
 * Once you receive the email, follow the link to be presented with a page that has a button called "Full Package". Right click that link and save the download link for later.
 * Now follow the following instructions to use this repo's easy installer to get the build environment set up:
 ```bash
-wget https://raw.githubusercontent.com/AndBobsYourUncle/neural_security_system/easy_installer.sh
+wget https://raw.githubusercontent.com/AndBobsYourUncle/neural_security_system/master/easy_installer.sh
 chmod +x easy_installer.sh
 sudo ./easy_installer.sh LINK_TO_OPENVINO_FULL_DOWNLOAD NON_ROOT_USER
 ```
