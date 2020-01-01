@@ -1,50 +1,47 @@
 # Neural Security System
 
-The goal of this tool is to allow monitoring of a security camera, and to actively publish the presense of humans to an MQTT topic. MQTT is a pubsub type protocol. This was inspired from [https://github.com/PINTO0309/OpenVINO-YoloV3](https://github.com/PINTO0309/OpenVINO-YoloV3)
+The goal of this tool is to allow monitoring of security cameras, and to actively publish the presense of humans to an MQTT topic. MQTT is a pubsub type protocol. This was inspired from [https://github.com/PINTO0309/OpenVINO-YoloV3](https://github.com/PINTO0309/OpenVINO-YoloV3)
 
 # Instructions for Building
 
-* Download and install the OpenVINO toolkit: [https://software.intel.com/en-us/articles/OpenVINO-Install-Linux](https://software.intel.com/en-us/articles/OpenVINO-Install-Linux). This project assumes you have installed the toolkit as a regular user, and not root. When you get to the step to run `sudo ./install_GUI.sh`, run it without `sudo` instead.
-* This version (master branch of repo) is verified to be working with a fresh install of OpenVINO 2019-R3
-* Install paho MQTT library
-
+* This version (master branch of repo) is verified to be working with a fresh install of Ubuntu 18.04 LTS Desktop with a download link to OpenVINO 2019-R3.1
+* Register to get a download link for the OpenVINO toolkit for Linux: https://software.intel.com/en-us/openvino-toolkit/choose-download/free-download-linux
+* Once you receive the email, follow the link to be presented with a page that has a button called "Full Package". Right click that link and save the download link for later.
+* Now follow the following instructions to use this repo's easy installer to get the build environment set up:
 ```bash
-sudo apt-get install libssl-dev
-sudo apt-get install libgflags-dev
-sudo apt-get install build-essential gcc make cmake cmake-gui cmake-curses-gui
-
-cd ~/
-git clone https://github.com/eclipse/paho.mqtt.c.git
-cd paho.mqtt.c/
-git checkout v1.3.1
-cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
-sudo cmake --build build/ --target install
-sudo ldconfig
-
-cd ~/
-git clone https://github.com/eclipse/paho.mqtt.cpp
-cd paho.mqtt.cpp/
-git checkout v1.1
-cmake -Bbuild -H. -DPAHO_WITH_SSL=ON -DPAHO_BUILD_SHARED=ON
-sudo cmake --build build/ --target install
-sudo ldconfig
-
-cd ~/
-git clone https://github.com/jbeder/yaml-cpp.git
-cd yaml-cpp/
-git checkout yaml-cpp-0.6.3
-mkdir build
-cd build
-cmake -DYAML_BUILD_SHARED_LIBS=ON ..
-sudo cmake --build ./ --target install
-sudo ldconfig
+wget https://raw.githubusercontent.com/AndBobsYourUncle/neural_security_system/easy_installer.sh
+chmod +x easy_installer.sh
+sudo ./easy_installer.sh LINK_TO_OPENVINO_FULL_DOWNLOAD NON_ROOT_USER
 ```
-
-* After you have installed all the prerequisites, build the sample projects. `cd ~/intel/openvino/deployment_tools/demo`, `./demo_squeezenet_download_convert_run.sh`
-* Now that you have the sample built, you should be able to copy `libcpu_extension.so` to the `lib/` folder of this repo (just in case the version here is outdated). It's most likely going to be located here: `~/inference_engine_samples/intel64/Release/lib/libcpu_extension.so`
-* `make -B`
+* You must use the link to download the full OpenVINO package from following the link in the email you received when registering to download OpenVINO. Also, this script assumes you have some non-root user that you'd like to use to build the final executable.
+* This script will take some time to complete. Once it is done, as your non-root user, run the following:
+```bash
+cd ~/neural_security_system
+source /opt/intel/openvino/bin/setupvars.sh
+make -B
+```
+* The build should succeed, and you should now have a working executable of this app.
 
 # Using
+
+You should create a YAML file that lists all cameras you'd like to monitor. Here's a sample:
+```
+cameras:
+  - name: Front Door
+    input: http://192.168.1.52:8081
+    mqtt_topic: cameras/front_door/humans
+    crop_top: 80
+    crop_right: 150
+    crop_bottom: 0
+    crop_left: 0
+  - name: Driveway
+    input: http://192.168.1.52:8082
+    mqtt_topic: cameras/driveway/humans
+    crop_top: 0
+    crop_right: 0
+    crop_bottom: 0
+    crop_left: 0
+```
 
 Running the application with the -h option yields the following usage message:
 
@@ -84,30 +81,34 @@ Options:
 ```
 
 Running the application with the empty list of options yields the usage message given above and an error message.
-You can use the following command to do inference on GPU with a pre-trained object detection model:
+
+To use the CPU, you _must_ pass in the path to the CPU extention when running the app. Also, before any exection, you have to run `source /opt/intel/openvino/bin/setupvars.sh`
+
 ### My Example Usage (MMJPEG security camera) w/ CPU
 ```bash
-$ ./neural_security_system -i http://192.168.1.52:8081 -m ./models/tiny_yolov3/FP32/frozen_tiny_yolo_v3.xml -d CPU -t 0.2 -u user -p password -tp cameras/front_door/humans -no_show -mh tcp://192.168.1.51:1883 -cr 150
+$ source /opt/intel/openvino/bin/setupvars.sh
+$ ./neural_security_system -cameras PATH_TO_CAMERA_YAML \
+-m ./models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.xml \
+-d CPU -u MQTT_USER -p MQTT_PASSWORD -mh tcp://MQTT_HOST_IP:1883 \
+-t 0.4 -no_show \
+-l $INTEL_CVSDK_DIR/deployment_tools/inference_engine/samples/build/intel64/Release/lib/libcpu_extension.so
 ```
 ### My Example Usage (MMJPEG security camera) w/ Intel Neural Compute Stick 2
 ```bash
-$ ./neural_security_system -i http://192.168.1.52:8081 -m ./models/tiny_yolov3/FP16/frozen_tiny_yolo_v3.xml -d MYRIAD -t 0.2 -u user -p password -tp cameras/front_door/humans -no_show -mh tcp://192.168.1.51:1883 -cr 150
+$ source /opt/intel/openvino/bin/setupvars.sh
+$ ./neural_security_system -cameras PATH_TO_CAMERA_YAML \
+-m ./models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.xml \
+-d MYRIAD -u MQTT_USER -p MQTT_PASSWORD -mh tcp://MQTT_HOST_IP:1883 \
+-t 0.4 -no_show
 ```
-**NOTE**: Public models should be first converted to the Inference Engine format (`*.xml` + `*.bin`) using the Model Optimizer tool.
 
-The only GUI knob is to use **Tab** to switch between the synchronized execution and the true Async mode.
+### Output
 
-### Demo Output
-
-This program uses OpenCV to display the resulting frame with detections (rendered as bounding boxes and labels, if provided).
-In the default mode, the program reports:
-* **OpenCV time**: frame decoding + time to render the bounding boxes, labels, and to display the results.
-* **Detection time**: inference time for the object detection network. It is reported in the Sync mode only.
-* **Wallclock time**, which is combined application-level performance.
+If you run the executable without the `-no_show` command line argument, you will get a set of windows open up, each with the output from one of the cameras being monitored. You will also see any bounding boxes drawn when it detects a human.
 
 ### Building the YOLOv3 Models
 
-There is an included Tony YOLO v3 model in this repo, but it may be out of date and not work with the most recent OpenVINO tollkit. Here's how to build each of the four versions of YOLOv3:
+The easy installer script should build all available YOLO models for you, but if you'd like to know how to do so yourself, here are the steps:
 
 ```bash
 git clone https://github.com/mystic123/tensorflow-yolo-v3.git
