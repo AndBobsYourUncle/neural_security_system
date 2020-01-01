@@ -69,7 +69,8 @@ cd /usr && \
 rm -rf /usr/paho.mqtt.cpp
 
 cd /usr && git clone https://github.com/jbeder/yaml-cpp.git && \
-cd /usr/yaml-cpp/git checkout yaml-cpp-0.6.3 && mkdir build
+cd /usr/yaml-cpp/
+git checkout yaml-cpp-0.6.3 && mkdir build
 cd /usr/yaml-cpp/build
 cmake -DYAML_BUILD_SHARED_LIBS=ON .. && \
 cmake --build ./ --target install && \
