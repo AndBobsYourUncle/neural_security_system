@@ -146,5 +146,6 @@ rm -rf /usr/tensorflow-yolo-v3
 cd /home/$2/
 git clone https://github.com/AndBobsYourUncle/neural_security_system.git
 cd neural_security_system
+git checkout dockerized
 
 source $INSTALL_DIR/bin/setupvars.sh && make -B
