@@ -28,7 +28,7 @@ mkdir $INSTALL_DIR/deployment_tools/inference_engine/samples/build && cd $INSTAL
 cd $INSTALL_DIR/deployment_tools/model_optimizer/install_prerequisites
 ./install_prerequisites.sh
 
-sudo usermod -a -G users "$(whoami)"
+sudo usermod -a -G users "$2"
 cp $INSTALL_DIR/inference_engine/external/97-myriad-usbboot.rules /etc/udev/rules.d/
 udevadm control --reload-rules
 udevadm trigger
@@ -81,7 +81,7 @@ wget https://pjreddie.com/media/files/yolov3-tiny.weights && \
 cp $INSTALL_DIR/deployment_tools/model_optimizer/extensions/front/tf/yolo_v3.json ./ && \
 cp $INSTALL_DIR/deployment_tools/model_optimizer/extensions/front/tf/yolo_v3_tiny.json ./ && \
 
-mkdir -p ~/neural_security_system/models/tiny_yolov3/FP16 && \
+mkdir -p /home/$2/neural_security_system/models/tiny_yolov3/FP16 && \
 cd /usr/tensorflow-yolo-v3 && \
 python3 convert_weights_pb.py --class_names coco.names \
   --data_format NHWC --weights_file yolov3-tiny.weights \
@@ -90,11 +90,11 @@ python3 $INSTALL_DIR/deployment_tools/model_optimizer/mo_tf.py \
   --input_model frozen_tiny_yolov3_model.pb \
   --tensorflow_use_custom_operations_config yolo_v3_tiny.json \
   --input_shape [1,416,416,3] --data_type=FP16 && \
-mv frozen_tiny_yolov3_model.xml ~/neural_security_system/models/tiny_yolov3/FP16/ && \
-mv frozen_tiny_yolov3_model.bin ~/neural_security_system/models/tiny_yolov3/FP16/ && \
-cp coco.names ~/neural_security_system/models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.labels && \
+mv frozen_tiny_yolov3_model.xml /home/$2/neural_security_system/models/tiny_yolov3/FP16/ && \
+mv frozen_tiny_yolov3_model.bin /home/$2/neural_security_system/models/tiny_yolov3/FP16/ && \
+cp coco.names /home/$2/neural_security_system/models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.labels && \
 
-mkdir -p ~/neural_security_system/models/tiny_yolov3/FP32 && \
+mkdir -p /home/$2/neural_security_system/models/tiny_yolov3/FP32 && \
 cd /usr/tensorflow-yolo-v3 && \
 python3 convert_weights_pb.py --class_names coco.names \
   --data_format NHWC --weights_file yolov3-tiny.weights \
@@ -103,11 +103,11 @@ python3 $INSTALL_DIR/deployment_tools/model_optimizer/mo_tf.py \
   --input_model frozen_tiny_yolov3_model.pb \
   --tensorflow_use_custom_operations_config yolo_v3_tiny.json \
   --input_shape [1,416,416,3] && \
-mv frozen_tiny_yolov3_model.xml ~/neural_security_system/models/tiny_yolov3/FP32/ && \
-mv frozen_tiny_yolov3_model.bin ~/neural_security_system/models/tiny_yolov3/FP32/ && \
-cp coco.names ~/neural_security_system/models/tiny_yolov3/FP32/frozen_tiny_yolov3_model.labels && \
+mv frozen_tiny_yolov3_model.xml /home/$2/neural_security_system/models/tiny_yolov3/FP32/ && \
+mv frozen_tiny_yolov3_model.bin /home/$2/neural_security_system/models/tiny_yolov3/FP32/ && \
+cp coco.names /home/$2/neural_security_system/models/tiny_yolov3/FP32/frozen_tiny_yolov3_model.labels && \
 
-mkdir -p ~/neural_security_system/models/yolov3/FP16 && \
+mkdir -p /home/$2/neural_security_system/models/yolov3/FP16 && \
 cd /usr/tensorflow-yolo-v3 && \
 python3 convert_weights_pb.py --class_names coco.names \
   --data_format NHWC --weights_file yolov3.weights \
@@ -116,11 +116,11 @@ python3 $INSTALL_DIR/deployment_tools/model_optimizer/mo_tf.py \
   --input_model frozen_yolov3_model.pb \
   --tensorflow_use_custom_operations_config yolo_v3.json \
   --input_shape [1,416,416,3] --data_type=FP16 && \
-mv frozen_yolov3_model.xml ~/neural_security_system/models/yolov3/FP16/ && \
-mv frozen_yolov3_model.bin ~/neural_security_system/models/yolov3/FP16/ && \
-cp coco.names ~/neural_security_system/models/yolov3/FP16/frozen_yolov3_model.labels && \
+mv frozen_yolov3_model.xml /home/$2/neural_security_system/models/yolov3/FP16/ && \
+mv frozen_yolov3_model.bin /home/$2/neural_security_system/models/yolov3/FP16/ && \
+cp coco.names /home/$2/neural_security_system/models/yolov3/FP16/frozen_yolov3_model.labels && \
 
-mkdir -p ~/neural_security_system/models/yolov3/FP32 && \
+mkdir -p /home/$2/neural_security_system/models/yolov3/FP32 && \
 cd /usr/tensorflow-yolo-v3 && \
 python3 convert_weights_pb.py --class_names coco.names \
   --data_format NHWC --weights_file yolov3.weights \
@@ -129,14 +129,14 @@ python3 $INSTALL_DIR/deployment_tools/model_optimizer/mo_tf.py \
   --input_model frozen_yolov3_model.pb \
   --tensorflow_use_custom_operations_config yolo_v3.json \
   --input_shape [1,416,416,3] && \
-mv frozen_yolov3_model.xml ~/neural_security_system/models/yolov3/FP32/ && \
-mv frozen_yolov3_model.bin ~/neural_security_system/models/yolov3/FP32/ && \
-cp coco.names ~/neural_security_system/models/yolov3/FP32/frozen_yolov3_model.labels && \
+mv frozen_yolov3_model.xml /home/$2/neural_security_system/models/yolov3/FP32/ && \
+mv frozen_yolov3_model.bin /home/$2/neural_security_system/models/yolov3/FP32/ && \
+cp coco.names /home/$2/neural_security_system/models/yolov3/FP32/frozen_yolov3_model.labels && \
 
 cd /usr && \
 rm -rf /usr/tensorflow-yolo-v3
 
-cd ~/
+cd /home/$2/
 git clone https://github.com/AndBobsYourUncle/neural_security_system.git
 cd neural_security_system
 
