@@ -2,6 +2,53 @@
 
 The goal of this tool is to allow monitoring of security cameras, and to actively publish the presense of humans to an MQTT topic. MQTT is a pubsub type protocol. This was inspired from [https://github.com/PINTO0309/OpenVINO-YoloV3](https://github.com/PINTO0309/OpenVINO-YoloV3)
 
+# Running via Docker
+
+This whole app has recently been packaged up into a Docker image for convenience. If you'd like to see live output from the app, you will still have to follow the instructions below for building it within a Ubuntu 18.04 LTS Desktop environment.
+
+Using the CPU:
+```bash
+docker run  \
+  -v /home/nicholas/cameras.yaml:/usr/neural_security_system/cameras.yaml \
+  -e CAMERAS="cameras.yaml" \
+  -e MODEL="./models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.xml" \
+  -e DEVICE="CPU" \
+  -e MQTT_USER="MQTT_USER" -e MQTT_PASSWORD="MQTT_PASSWORD" \
+  -e MQTT_HOST="tcp://MQTT_HOST_IP:1883" andbobsyouruncle/neural_security_system
+```
+
+And then like this if you happen to have an Intel Neural Compute Stick 2 plugged into the host machine running docker:
+```bash
+docker run --privileged -v /dev/bus/usb:/dev/bus/usb \
+  -v /home/nicholas/cameras.yaml:/usr/neural_security_system/cameras.yaml \
+  -e CAMERAS="cameras.yaml" \
+  -e MODEL="./models/tiny_yolov3/FP16/frozen_tiny_yolov3_model.xml" \
+  -e DEVICE="MYRIAD" \
+  -e MQTT_USER="MQTT_USER" -e MQTT_PASSWORD="MQTT_PASSWORD" \
+  -e MQTT_HOST="tcp://MQTT_HOST_IP:1883" andbobsyouruncle/neural_security_system
+```
+
+You must have a cameras.yaml file on the host machine, and it should look something like this:
+```
+cameras:
+  - name: Front Door
+    input: http://192.168.1.52:8081
+    mqtt_topic: cameras/front_door/humans
+    crop_top: 80
+    crop_right: 150
+    crop_bottom: 0
+    crop_left: 0
+  - name: Driveway
+    input: http://192.168.1.52:8082
+    mqtt_topic: cameras/driveway/humans
+    crop_top: 0
+    crop_right: 0
+    crop_bottom: 0
+    crop_left: 0
+```
+
+Use the path to this file whever you save it to on the host machine for the `-v /home/nicholas/cameras.yaml:/usr/neural_security_system/cameras.yaml` portion of `docker run`.
+
 # Instructions for Building
 
 * This version (master branch of repo) is verified to be working with a fresh install of Ubuntu 18.04 LTS Desktop with a download link to OpenVINO 2019-R3.1
