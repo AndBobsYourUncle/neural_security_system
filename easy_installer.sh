@@ -14,6 +14,7 @@ rm -rf /var/lib/apt/lists/*
 mkdir -p $TEMP_DIR && cd $TEMP_DIR && \
 wget -c $DOWNLOAD_LINK && \
 tar xf l_openvino_toolkit*.tgz && \
+rm l_openvino_toolkit*.tgz && \
 cd l_openvino_toolkit* && \
 sed -i 's/decline/accept/g' silent.cfg && \
 sed -i 's/=DEFAULTS/=intel-openvino-ie-sdk-ubuntu-bionic__x86_64;intel-openvino-ie-rt-cpu-ubuntu-bionic__x86_64;intel-openvino-ie-rt-vpu-ubuntu-bionic__x86_64;intel-openvino-model-optimizer__x86_64;intel-openvino-opencv-lib-ubuntu-bionic__x86_64/g' silent.cfg && \
