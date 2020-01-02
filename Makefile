@@ -39,8 +39,7 @@ neural_security_system:
             -L$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/bin/intel64/Release/lib \
             -L$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/lib/intel64 \
             -L$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/samples/build/intel64/Release/lib \
-            -L$(INTEL_CVSDK_DIR)/opencv/lib -ldl -linference_engine -lopencv_highgui -lopencv_core -lopencv_imgproc -lopencv_videoio -lopencv_imgcodecs -lopencv_imgcodecs -lcpu_extension \
-            -L$(HOME)/inference_engine_samples_build/intel64/Release/lib -lgflags_nothreads \
+            -L$(INTEL_CVSDK_DIR)/opencv/lib -ldl -linference_engine -lopencv_highgui -lopencv_core -lopencv_imgproc -lopencv_videoio -lopencv_imgcodecs -lopencv_imgcodecs -lcpu_extension -lgflags_nothreads \
             $< $(LDLIBS)
 
 
