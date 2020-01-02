@@ -81,7 +81,6 @@ rm -rf /usr/yaml-cpp
 cd /home/$2/
 git clone https://github.com/AndBobsYourUncle/neural_security_system.git
 cd neural_security_system
-git checkout dockerized
 
 pip3 install image && \
 cd /usr && git clone https://github.com/mystic123/tensorflow-yolo-v3.git && \
