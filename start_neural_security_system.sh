@@ -14,4 +14,4 @@ signalListener() {
 
 source $INSTALL_DIR/bin/setupvars.sh
 
-signalListener ./neural_security_system -cameras $CAMERAS -m $MODEL -d $DEVICE -u $MQTT_USER -p $MQTT_PASSWORD -mh $MQTT_HOST -t $THRESHOLD -iou_t $IOU_THRESHOLD -to $HUMAN_TIMEOUT -no_show -l $INTEL_CVSDK_DIR/deployment_tools/inference_engine/samples/build/intel64/Release/lib/libcpu_extension.so
+signalListener ./neural_security_system -cameras $CAMERAS -m $MODEL -d $DEVICE -u $MQTT_USER -p $MQTT_PASSWORD -mh $MQTT_HOST -t $THRESHOLD -iou_t $IOU_THRESHOLD -to $HUMAN_TIMEOUT -no_show
