@@ -26,7 +26,7 @@ rm -rf $TEMP_DIR
 
 $INSTALL_DIR/install_dependencies/install_openvino_dependencies.sh
 # build Inference Engine samples
-mkdir $INSTALL_DIR/deployment_tools/inference_engine/samples/build && cd $INSTALL_DIR/deployment_tools/inference_engine/samples/build && \
+mkdir $INSTALL_DIR/deployment_tools/inference_engine/samples/cpp/build && cd $INSTALL_DIR/deployment_tools/inference_engine/samples/cpp/build && \
 /bin/bash -c "source $INSTALL_DIR/bin/setupvars.sh && cmake .. && make -j1"
 
 cd $INSTALL_DIR/deployment_tools/model_optimizer/install_prerequisites

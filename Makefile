@@ -20,11 +20,11 @@ LDLIBS_SSL += -L../../lib -L$(PAHO_C_LIB_DIR) -lpaho-mqttpp3 -lpaho-mqtt3as -lya
 
 neural_security_system:
 	$(CXX) $(CPPFLAGS) $(CXXFLAGS) -o $@ main.cpp -I. \
-						-L./lib/ -Wl,-rpath=./lib/ -l:libcpu_extension.so \
+						-L./lib/ -Wl,-rpath=./lib/ \
             -I$(INTEL_CVSDK_DIR)/opencv/include/ \
             -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/include/ \
             -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/include/cpp \
-            -L$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/lib/intel64 -linference_engine -ldl -lpthread -lcpu_extension \
+            -L$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/lib/intel64 -linference_engine -ldl -lpthread \
             -L$(INTEL_CVSDK_DIR)/opencv/lib -lopencv_core -lopencv_imgcodecs -lopencv_imgproc -lopencv_highgui -lopencv_videoio -lopencv_video \
             -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/include \
             -I$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/samples/ \
@@ -39,7 +39,7 @@ neural_security_system:
             -L$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/bin/intel64/Release/lib \
             -L$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/lib/intel64 \
             -L$(INTEL_CVSDK_DIR)/deployment_tools/inference_engine/samples/build/intel64/Release/lib \
-            -L$(INTEL_CVSDK_DIR)/opencv/lib -ldl -linference_engine -lopencv_highgui -lopencv_core -lopencv_imgproc -lopencv_videoio -lopencv_imgcodecs -lopencv_imgcodecs -lcpu_extension -lgflags_nothreads \
+            -L$(INTEL_CVSDK_DIR)/opencv/lib -ldl -linference_engine -lopencv_highgui -lopencv_core -lopencv_imgproc -lopencv_videoio -lopencv_imgcodecs -lopencv_imgcodecs -lgflags_nothreads \
             $< $(LDLIBS)
 
 
