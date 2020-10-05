@@ -62,7 +62,7 @@ The “non-tiny” version is more accurate, but takes more resources. And the F
 
 # Instructions for Building
 
-* This version (master branch of repo) is verified to be working with a fresh install of Ubuntu 18.04 LTS Desktop with a download link to OpenVINO 2019-R3.1
+* This version (master branch of repo) is verified to be working with a fresh install of Ubuntu 18.04 LTS Desktop with a download link to OpenVINO 2020-R1
 * Register to get a download link for the OpenVINO toolkit for Linux: https://software.intel.com/en-us/openvino-toolkit/choose-download/free-download-linux
 * Once you receive the email, follow the link to be presented with a page that has a button called "Full Package". Right click that link and save the download link for later.
 * Now follow the following instructions to use this repo's easy installer to get the build environment set up:
