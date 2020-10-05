@@ -470,7 +470,7 @@ int main(int argc, char *argv[]) {
             topics[i] = mqtt::topic::create(cli, camera_topics[i], QOS, true);
 
             // Initial publish for "off"
-            mqtt::topic current_topic(*topics[camera_index]);
+            mqtt::topic current_topic(*topics[i]);
             current_topic.publish(std::move("OFF"));
         }
 
