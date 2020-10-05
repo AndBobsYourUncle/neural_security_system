@@ -285,7 +285,6 @@ int main(int argc, char *argv[]) {
 
         mqtt::connect_options connOpts;
 
-        mqtt::connect_options conopts;
         mqtt::message willmsg("cameras/lwt", "unexpected exit", 1, true);
         mqtt::will_options will(willmsg);
         connOpts.set_will(will);
