@@ -284,6 +284,11 @@ int main(int argc, char *argv[]) {
         mqtt::async_client cli(address, "", MAX_BUFFERED_MSGS, PERSIST_DIR);
 
         mqtt::connect_options connOpts;
+
+        mqtt::message willmsg("cameras/lwt", "unexpected exit", 1, true);
+        mqtt::will_options will(willmsg);
+        connOpts.set_will(will);
+
         connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
         connOpts.set_clean_session(true);
         connOpts.set_automatic_reconnect(true);
@@ -294,6 +299,12 @@ int main(int argc, char *argv[]) {
         cout << "Connecting to server '" << address << "'..." << flush;
         cli.connect(connOpts)->wait();
         cout << "OK\n" << endl;
+
+        // Initial publish for "off"
+        mqtt::topic::ptr_t alive_topic;
+        alive_topic = mqtt::topic::create(cli, "cameras/connection_alive", QOS, true);
+        mqtt::topic current_topic(*alive_topic);
+        current_topic.publish(std::move("OFF"));
 
         /** This demo covers a certain topology and cannot be generalized for any object detection **/
         std::cout << "InferenceEngine: " << GetInferenceEngineVersion() << std::endl;
@@ -458,11 +469,13 @@ int main(int argc, char *argv[]) {
             topics[i] = mqtt::topic::create(cli, camera_topics[i], QOS, true);
 
             // Initial publish for "off"
-            mqtt::topic current_topic(*topics[camera_index]);
+            mqtt::topic current_topic(*topics[i]);
             current_topic.publish(std::move("OFF"));
         }
 
         bool all_cameras_started = false;
+
+        bool alive_signal_sent = false;
 
         while (!exit_gracefully) {
             cv::Mat source_frame;
@@ -509,6 +522,13 @@ int main(int argc, char *argv[]) {
 
             if(!all_cameras_started) {
                 continue;
+            }
+
+            if(all_cameras_started && !alive_signal_sent) {
+                mqtt::topic current_topic(*alive_topic);
+                current_topic.publish(std::move("ON"));
+
+                alive_signal_sent = true;
             }
 
             bool has_people_in_frame = false;
@@ -633,6 +653,9 @@ int main(int argc, char *argv[]) {
         }
 
         cv::destroyAllWindows();
+
+        mqtt::topic not_alive_topic(*alive_topic);
+        not_alive_topic.publish(std::move("OFF"));
 
         /** Showing performace results **/
         if (FLAGS_pc) {
