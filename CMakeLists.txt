@@ -1,0 +1,210 @@
+# Copyright (C) 2018-2020 Intel Corporation
+# SPDX-License-Identifier: Apache-2.0
+#
+
+cmake_minimum_required (VERSION 3.10)
+
+project(Demos)
+
+option(ENABLE_PYTHON "Whether to build extension modules for Python demos" OFF)
+
+if (CMAKE_BUILD_TYPE STREQUAL "")
+    message(STATUS "CMAKE_BUILD_TYPE not defined, 'Release' will be used")
+    set(CMAKE_BUILD_TYPE "Release")
+endif()
+
+if (NOT(BIN_FOLDER))
+    string(TOLOWER ${CMAKE_SYSTEM_PROCESSOR} ARCH)
+    if(ARCH STREQUAL "x86_64" OR ARCH STREQUAL "amd64") # Windows detects Intel's 64-bit CPU as AMD64
+        set(ARCH intel64)
+    elseif(ARCH STREQUAL "i386")
+        set(ARCH ia32)
+    endif()
+
+    set (BIN_FOLDER ${ARCH})
+endif()
+
+set (CMAKE_POSITION_INDEPENDENT_CODE ON)
+
+foreach(artifact IN ITEMS ARCHIVE COMPILE_PDB LIBRARY PDB RUNTIME)
+    set("CMAKE_${artifact}_OUTPUT_DIRECTORY" "${CMAKE_CURRENT_BINARY_DIR}/${BIN_FOLDER}/$<CONFIG>")
+endforeach()
+
+if(UNIX)
+    string(APPEND CMAKE_LIBRARY_OUTPUT_DIRECTORY "/lib")
+    string(APPEND CMAKE_ARCHIVE_OUTPUT_DIRECTORY "/lib")
+endif()
+
+if (WIN32)
+    if (NOT "${CMAKE_SIZEOF_VOID_P}" EQUAL "8")
+        message(FATAL_ERROR "Only 64-bit supported on Windows")
+    endif()
+
+    set_property (DIRECTORY APPEND PROPERTY COMPILE_DEFINITIONS _CRT_SECURE_NO_WARNINGS)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -D_SCL_SECURE_NO_WARNINGS -DNOMINMAX")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /EHsc") #no asynchronous structured exception handling
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} /LARGEADDRESSAWARE")
+
+    if (${CMAKE_CXX_COMPILER_ID} STREQUAL MSVC)
+        set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /wd4251 /wd4275 /wd4267") #disable some warnings
+    endif()
+elseif(UNIX)
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wuninitialized -Winit-self")
+    if(NOT ${CMAKE_CXX_COMPILER_ID} STREQUAL Clang)
+        set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wmaybe-uninitialized")
+    endif()
+endif()
+
+####################################
+## to use C++11
+set (CMAKE_CXX_STANDARD 11)
+set (CMAKE_CXX_STANDARD_REQUIRED ON)
+if (${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
+    set (CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
+endif()
+####################################
+
+set (GFLAGS_IS_SUBPROJECT TRUE)
+set (HAVE_SYS_STAT_H 1)
+set (HAVE_INTTYPES_H 1)
+
+add_subdirectory(/opt/intel/openvino_2021.2.185/deployment_tools/open_model_zoo/demos/thirdparty/gflags build/thirdparty/gflags)
+
+if (${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
+endif()
+
+add_subdirectory(/opt/intel/openvino_2021.2.185/deployment_tools/open_model_zoo/demos/common build/common)
+
+# function(add_samples_to_build)
+#     # check each passed sample subdirectory
+#     foreach (dir ${ARGN})
+#         if (IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${dir})
+#             # check if a subdirectory contains CMakeLists.txt. In this case we can build it.
+#             file(GLOB is_sample_dir "${CMAKE_CURRENT_SOURCE_DIR}/${dir}/CMakeLists.txt")
+#             if(is_sample_dir)
+#                 # check if specified sample/demo is found.
+#                 if (BUILD_SAMPLE_NAME)
+#                     list(FIND BUILD_SAMPLE_NAME ${dir} index)
+#                 endif()
+#                 if (index EQUAL -1)
+#                     message(STATUS "${dir} SKIPPED")
+#                 else()
+#                     # Include subdirectory to the project.
+#                     add_subdirectory(${dir})
+#                 endif()
+#             endif()
+#         endif()
+#     endforeach()
+# endfunction(add_samples_to_build)
+
+include(CMakeParseArguments)
+
+#
+# ie_add_sample(NAME <target name>
+#               SOURCES <source files>
+#               [HEADERS <header files>]
+#               [INCLUDE_DIRECTORIES <include dir>]
+#               [DEPENDENCIES <dependencies>]
+#               [OPENCV_DENENDENCIES <opencv modules>]
+#               [EXCLUDE_CPPLINT]
+#
+macro(ie_add_sample)
+    set(options EXCLUDE_CPPLINT)
+    set(oneValueArgs NAME)
+    set(multiValueArgs SOURCES HEADERS DEPENDENCIES OPENCV_DEPENDENCIES INCLUDE_DIRECTORIES)
+    cmake_parse_arguments(IE_SAMPLE "${options}" "${oneValueArgs}"
+                          "${multiValueArgs}" ${ARGN} )
+
+    # Find OpenCV components if exist
+    if(IE_SAMPLE_OPENCV_DEPENDENCIES)
+        find_package(OpenCV COMPONENTS ${IE_SAMPLE_OPENCV_DEPENDENCIES} QUIET)
+        if(NOT OpenCV_FOUND)
+            message(WARNING "OPENCV is disabled or not found, " ${IE_SAMPLE_NAME} " skipped")
+            return()
+        else()
+            add_definitions(-DUSE_OPENCV)
+        endif()
+    endif()
+
+    # Create named folders for the sources within the .vcproj
+    # Empty name lists them directly under the .vcproj
+    source_group("src" FILES ${IE_SAMPLE_SOURCES})
+    if(IE_SAMPLE_HEADERS)
+        source_group("include" FILES ${IE_SAMPLE_HEADERS})
+    endif()
+
+    # Create executable file from sources
+    add_executable(${IE_SAMPLE_NAME} ${IE_SAMPLE_SOURCES} ${IE_SAMPLE_HEADERS})
+
+    if(WIN32)
+        set_target_properties(${IE_SAMPLE_NAME} PROPERTIES COMPILE_PDB_NAME ${IE_SAMPLE_NAME})
+    endif()
+
+    if(IE_SAMPLE_INCLUDE_DIRECTORIES)
+        target_include_directories(${IE_SAMPLE_NAME} PRIVATE ${IE_SAMPLE_INCLUDE_DIRECTORIES})
+    endif()
+
+    target_link_libraries(${IE_SAMPLE_NAME} PRIVATE ${OpenCV_LIBRARIES} ${InferenceEngine_LIBRARIES}
+                                                    ${IE_SAMPLE_DEPENDENCIES} common gflags)
+
+    if(UNIX)
+        target_link_libraries(${IE_SAMPLE_NAME} PRIVATE pthread)
+    endif()
+
+    # create global target with all samples / demo apps
+    if(NOT TARGET ie_samples)
+        add_custom_target(ie_samples ALL)
+    endif()
+    add_dependencies(ie_samples ${IE_SAMPLE_NAME})
+
+    if(COMMAND add_cpplint_target AND NOT IE_SAMPLE_EXCLUDE_CPPLINT)
+        add_cpplint_target(${IE_SAMPLE_NAME}_cpplint FOR_TARGETS ${IE_SAMPLE_NAME})
+    endif()
+endmacro()
+
+
+# use this flag if you need to throw custom message in case if the IE package is not found.
+if (IE_NOT_FOUND_MESSAGE)
+    find_package(InferenceEngine 2.0 QUIET)
+    if (NOT(InferenceEngine_FOUND))
+        message(FATAL_ERROR ${IE_NOT_FOUND_MESSAGE})
+    endif()
+else()
+    find_package(InferenceEngine 2.0 REQUIRED)
+endif()
+
+find_package(ngraph REQUIRED)
+
+# collect all samples subdirectories
+file(GLOB samples_dirs RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *)
+# skip building of unnecessary subdirectories
+list(REMOVE_ITEM samples_dirs common thirdparty)
+# add_samples_to_build(${samples_dirs})
+
+FILE(GLOB SRC_FILES ./*.cpp)
+FILE(GLOB H_FILES ./*.h)
+
+ie_add_sample(NAME neural_security_system
+              SOURCES ${SRC_FILES}
+              HEADERS ${H_FILES}
+              DEPENDENCIES monitors models pipelines
+              OPENCV_DEPENDENCIES highgui videoio imgproc)
+
+if(ENABLE_PYTHON)
+    find_package(PythonInterp 3.6 REQUIRED)
+    find_package(PythonLibs "${PYTHON_VERSION_STRING}" EXACT REQUIRED)
+
+    execute_process(
+    COMMAND "${PYTHON_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
+    OUTPUT_VARIABLE NUMPY_INCLUDE_DIR
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+    RESULT_VARIABLE NUMPY_NOT_FOUND)
+    if(NUMPY_NOT_FOUND)
+        message(FATAL_ERROR "NumPy headers not found")
+    endif()
+
+    add_subdirectory(python_demos/human_pose_estimation_3d_demo/pose_extractor)
+    add_subdirectory(python_demos/common/monitors_extension)
+    add_subdirectory(python_demos/speech_recognition_demo/ctcdecode-numpy)
+endif()
