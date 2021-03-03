@@ -14,6 +14,8 @@
 #  See the License for the specific language governing permissions and
 #  limitations under the License.
 
+# test
+
 error() {
     local code="${3:-1}"
     if [[ -n "$2" ]];then
