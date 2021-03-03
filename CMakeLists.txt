@@ -4,9 +4,21 @@
 
 cmake_minimum_required (VERSION 3.10)
 
-project(Demos)
+project(NeuralSecuritySystem)
 
-option(ENABLE_PYTHON "Whether to build extension modules for Python demos" OFF)
+include(CheckCXXCompilerFlag)
+
+#A function created to perform the same as in set(CMAKE_CXX...
+function(enable_cxx_compiler_flag_if_supported flag)
+    string(FIND "${CMAKE_CXX_FLAGS}" "${flag}" flag_already_set)
+  if(flag_already_set EQUAL -1)
+   check_cxx_compiler_flag("${flag}" flag_supported)
+   if(flag_supported)
+    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${flag}" PARENT_SCOPE)
+   endif()
+   unset(flag_supported CACHE)
+  endif()
+endfunction()
 
 if (CMAKE_BUILD_TYPE STREQUAL "")
     message(STATUS "CMAKE_BUILD_TYPE not defined, 'Release' will be used")
@@ -68,40 +80,20 @@ set (GFLAGS_IS_SUBPROJECT TRUE)
 set (HAVE_SYS_STAT_H 1)
 set (HAVE_INTTYPES_H 1)
 
-add_subdirectory(/opt/intel/openvino_2021.2.185/deployment_tools/open_model_zoo/demos/thirdparty/gflags build/thirdparty/gflags)
+add_subdirectory(${INTEL_OPENVINO_DIR}/deployment_tools/open_model_zoo/demos/thirdparty/gflags libs/thirdparty/gflags)
+
+# add_subdirectory(/home/nicholas/paho.mqtt.cpp libs/mqtt)
 
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 endif()
 
-add_subdirectory(/opt/intel/openvino_2021.2.185/deployment_tools/open_model_zoo/demos/common build/common)
-
-# function(add_samples_to_build)
-#     # check each passed sample subdirectory
-#     foreach (dir ${ARGN})
-#         if (IS_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/${dir})
-#             # check if a subdirectory contains CMakeLists.txt. In this case we can build it.
-#             file(GLOB is_sample_dir "${CMAKE_CURRENT_SOURCE_DIR}/${dir}/CMakeLists.txt")
-#             if(is_sample_dir)
-#                 # check if specified sample/demo is found.
-#                 if (BUILD_SAMPLE_NAME)
-#                     list(FIND BUILD_SAMPLE_NAME ${dir} index)
-#                 endif()
-#                 if (index EQUAL -1)
-#                     message(STATUS "${dir} SKIPPED")
-#                 else()
-#                     # Include subdirectory to the project.
-#                     add_subdirectory(${dir})
-#                 endif()
-#             endif()
-#         endif()
-#     endforeach()
-# endfunction(add_samples_to_build)
+add_subdirectory(${INTEL_OPENVINO_DIR}/deployment_tools/open_model_zoo/demos/common libs/common)
 
 include(CMakeParseArguments)
 
 #
-# ie_add_sample(NAME <target name>
+# is_add_project(NAME <target name>
 #               SOURCES <source files>
 #               [HEADERS <header files>]
 #               [INCLUDE_DIRECTORIES <include dir>]
@@ -109,18 +101,18 @@ include(CMakeParseArguments)
 #               [OPENCV_DENENDENCIES <opencv modules>]
 #               [EXCLUDE_CPPLINT]
 #
-macro(ie_add_sample)
+macro(is_add_project)
     set(options EXCLUDE_CPPLINT)
     set(oneValueArgs NAME)
     set(multiValueArgs SOURCES HEADERS DEPENDENCIES OPENCV_DEPENDENCIES INCLUDE_DIRECTORIES)
-    cmake_parse_arguments(IE_SAMPLE "${options}" "${oneValueArgs}"
+    cmake_parse_arguments(IE_PROJECT "${options}" "${oneValueArgs}"
                           "${multiValueArgs}" ${ARGN} )
 
     # Find OpenCV components if exist
-    if(IE_SAMPLE_OPENCV_DEPENDENCIES)
-        find_package(OpenCV COMPONENTS ${IE_SAMPLE_OPENCV_DEPENDENCIES} QUIET)
+    if(IE_PROJECT_OPENCV_DEPENDENCIES)
+        find_package(OpenCV COMPONENTS ${IE_PROJECT_OPENCV_DEPENDENCIES} QUIET)
         if(NOT OpenCV_FOUND)
-            message(WARNING "OPENCV is disabled or not found, " ${IE_SAMPLE_NAME} " skipped")
+            message(WARNING "OPENCV is disabled or not found, " ${IE_PROJECT_NAME} " skipped")
             return()
         else()
             add_definitions(-DUSE_OPENCV)
@@ -129,37 +121,44 @@ macro(ie_add_sample)
 
     # Create named folders for the sources within the .vcproj
     # Empty name lists them directly under the .vcproj
-    source_group("src" FILES ${IE_SAMPLE_SOURCES})
-    if(IE_SAMPLE_HEADERS)
-        source_group("include" FILES ${IE_SAMPLE_HEADERS})
+    source_group("src" FILES ${IE_PROJECT_SOURCES})
+    if(IE_PROJECT_HEADERS)
+        source_group("include" FILES ${IE_PROJECT_HEADERS})
     endif()
 
     # Create executable file from sources
-    add_executable(${IE_SAMPLE_NAME} ${IE_SAMPLE_SOURCES} ${IE_SAMPLE_HEADERS})
+    add_executable(${IE_PROJECT_NAME} ${IE_PROJECT_SOURCES} ${IE_PROJECT_HEADERS})
 
     if(WIN32)
-        set_target_properties(${IE_SAMPLE_NAME} PROPERTIES COMPILE_PDB_NAME ${IE_SAMPLE_NAME})
+        set_target_properties(${IE_PROJECT_NAME} PROPERTIES COMPILE_PDB_NAME ${IE_PROJECT_NAME})
     endif()
 
-    if(IE_SAMPLE_INCLUDE_DIRECTORIES)
-        target_include_directories(${IE_SAMPLE_NAME} PRIVATE ${IE_SAMPLE_INCLUDE_DIRECTORIES})
+    if(IE_PROJECT_INCLUDE_DIRECTORIES)
+        target_include_directories(${IE_PROJECT_NAME} PRIVATE ${IE_PROJECT_INCLUDE_DIRECTORIES})
     endif()
 
-    target_link_libraries(${IE_SAMPLE_NAME} PRIVATE ${OpenCV_LIBRARIES} ${InferenceEngine_LIBRARIES}
-                                                    ${IE_SAMPLE_DEPENDENCIES} common gflags)
+    target_link_libraries(${IE_PROJECT_NAME} PRIVATE ${OpenCV_LIBRARIES} ${InferenceEngine_LIBRARIES}
+                                                    ${IE_PROJECT_DEPENDENCIES} common gflags)
 
     if(UNIX)
-        target_link_libraries(${IE_SAMPLE_NAME} PRIVATE pthread)
+        target_link_libraries(${IE_PROJECT_NAME} PRIVATE pthread)
     endif()
 
-    # create global target with all samples / demo apps
-    if(NOT TARGET ie_samples)
-        add_custom_target(ie_samples ALL)
-    endif()
-    add_dependencies(ie_samples ${IE_SAMPLE_NAME})
+    # target_link_libraries(${IE_PROJECT_NAME} PRIVATE paho-mqtt3a)
+    # target_link_libraries(${IE_PROJECT_NAME} PRIVATE paho-mqttpp3)
+    # # target_link_libraries(${IE_PROJECT_NAME} PRIVATE ${PahoMqttC_LIBRARIES})
+    # find_package(PahoMqttCpp REQUIRED)
 
-    if(COMMAND add_cpplint_target AND NOT IE_SAMPLE_EXCLUDE_CPPLINT)
-        add_cpplint_target(${IE_SAMPLE_NAME}_cpplint FOR_TARGETS ${IE_SAMPLE_NAME})
+    target_link_libraries(${IE_PROJECT_NAME} PRIVATE PahoMqttCpp::paho-mqttpp3)
+
+    # create global target with all projects
+    if(NOT TARGET ie_projects)
+        add_custom_target(ie_projects ALL)
+    endif()
+    add_dependencies(ie_projects ${IE_PROJECT_NAME})
+
+    if(COMMAND add_cpplint_target AND NOT IE_PROJECT_EXCLUDE_CPPLINT)
+        add_cpplint_target(${IE_PROJECT_NAME}_cpplint FOR_TARGETS ${IE_PROJECT_NAME})
     endif()
 endmacro()
 
@@ -176,35 +175,28 @@ endif()
 
 find_package(ngraph REQUIRED)
 
-# collect all samples subdirectories
-file(GLOB samples_dirs RELATIVE ${CMAKE_CURRENT_SOURCE_DIR} *)
-# skip building of unnecessary subdirectories
-list(REMOVE_ITEM samples_dirs common thirdparty)
-# add_samples_to_build(${samples_dirs})
+# enable_cxx_compiler_flag_if_supported("-O2")
+# enable_cxx_compiler_flag_if_supported("D_NDEBUG")
+
+find_package(OpenSSL REQUIRED)
+find_package(PahoMqttCpp REQUIRED)
+
+# find_package(PahoMqttCpp REQUIRED)
+
+# find_library(paho-mqttpp3 NAMES libpaho-mqttpp3.a REQUIRED)
+# find_library(paho-mqtt3a NAMES libpaho-mqtt3a.so REQUIRED)
+
+# add_library(pahottpp STATIC IMPORTED)
+# set_target_properties(pahottpp PROPERTIES IMPORTED_LOCATION ${paho-mqttpp3})
+
+# add_library(pahomqtt3a SHARED IMPORTED)
+# set_property(TARGET pahomqtt3a PROPERTY IMPORTED_LOCATION ${paho-mqtt3a})
 
 FILE(GLOB SRC_FILES ./*.cpp)
 FILE(GLOB H_FILES ./*.h)
 
-ie_add_sample(NAME neural_security_system
+is_add_project(NAME neural_security_system
               SOURCES ${SRC_FILES}
               HEADERS ${H_FILES}
               DEPENDENCIES monitors models pipelines
               OPENCV_DEPENDENCIES highgui videoio imgproc)
-
-if(ENABLE_PYTHON)
-    find_package(PythonInterp 3.6 REQUIRED)
-    find_package(PythonLibs "${PYTHON_VERSION_STRING}" EXACT REQUIRED)
-
-    execute_process(
-    COMMAND "${PYTHON_EXECUTABLE}" -c "import numpy; print(numpy.get_include())"
-    OUTPUT_VARIABLE NUMPY_INCLUDE_DIR
-    OUTPUT_STRIP_TRAILING_WHITESPACE
-    RESULT_VARIABLE NUMPY_NOT_FOUND)
-    if(NUMPY_NOT_FOUND)
-        message(FATAL_ERROR "NumPy headers not found")
-    endif()
-
-    add_subdirectory(python_demos/human_pose_estimation_3d_demo/pose_extractor)
-    add_subdirectory(python_demos/common/monitors_extension)
-    add_subdirectory(python_demos/speech_recognition_demo/ctcdecode-numpy)
-endif()

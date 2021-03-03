@@ -43,6 +43,16 @@
 #include "models/detection_model_yolo.h"
 #include "models/detection_model_ssd.h"
 
+#include "mqtt/async_client.h"
+
+const int QOS = 1;
+
+const auto PERIOD = std::chrono::seconds(5);
+
+const int MAX_BUFFERED_MSGS = 120;  // 120 * 5sec => 10min off-line buffering
+
+const std::string PERSIST_DIR { "./persist" };
+
 static const char help_message[] = "Print a usage message.";
 static const char at_message[] = "Required. Architecture type: ssd or yolo";
 static const char video_message[] = "Required. Path to a video file (specify \"cam\" to work with camera).";
@@ -190,6 +200,20 @@ cv::Mat renderDetectionData(const DetectionResult& result) {
 
 int main(int argc, char *argv[]) {
     try {
+        mqtt::async_client cli("tcp://192.168.1.51:1883", "some-client", MAX_BUFFERED_MSGS, PERSIST_DIR);
+
+        mqtt::connect_options connOpts;
+        connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
+        connOpts.set_clean_session(true);
+        connOpts.set_automatic_reconnect(true);
+        connOpts.set_user_name("username");
+        connOpts.set_password("password");
+
+        // Connect to the MQTT broker
+        std::cout << "Connecting to server '" << "mqtt://192.168.1.51" << "'..." << std::flush;
+        cli.connect(connOpts)->wait();
+        std::cout << "OK\n" << std::endl;
+
         PerformanceMetrics metrics;
 
         slog::info << "InferenceEngine: " << printable(*InferenceEngine::GetInferenceEngineVersion()) << slog::endl;

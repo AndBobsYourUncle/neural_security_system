@@ -41,30 +41,20 @@ for opt in "$@"; do
     esac
 done
 
-DEMOS_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+BUILD_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
 
-printf "\nSetting environment variables for building demos...\n"
+printf "\nSetting environment variables for building app...\n"
 
 if [ -z "$INTEL_OPENVINO_DIR" ]; then
-    if [ -e "$DEMOS_PATH/../../bin/setupvars.sh" ]; then
-        setvars_path="$DEMOS_PATH/../../bin/setupvars.sh"
-    elif [ -e "$DEMOS_PATH/../../../bin/setupvars.sh" ]; then
-        setvars_path="$DEMOS_PATH/../../../bin/setupvars.sh"
-    else
-        printf "Error: Failed to set the environment variables automatically. To fix, run the following command:\n source <INSTALL_DIR>/bin/setupvars.sh\n where INSTALL_DIR is the OpenVINO installation directory.\n\n"
-        exit 1
-    fi
-    if ! source "$setvars_path"; then
-        printf "Unable to run ./setupvars.sh. Please check its presence. \n\n"
-        exit 1
-    fi
+    printf "Error: Failed to set the environment variables automatically. To fix, run the following command:\n source <INSTALL_DIR>/bin/setupvars.sh\n where INSTALL_DIR is the OpenVINO installation directory.\n\n"
+    exit 1
 else
     # case for run with `sudo -E`
     source "$INTEL_OPENVINO_DIR/bin/setupvars.sh"
 fi
 
 if ! command -v cmake &>/dev/null; then
-    printf "\n\nCMAKE is not installed. It is required to build Open Model Zoo demos. Please install it. \n\n"
+    printf "\n\nCMAKE is not installed. It is required to build this project. Please install it. \n\n"
     exit 1
 fi
 
@@ -83,7 +73,7 @@ if [ -e "$build_dir/CMakeCache.txt" ]; then
 fi
 mkdir -p "$build_dir"
 
-(cd "$build_dir" && cmake -DCMAKE_BUILD_TYPE=Release "${extra_cmake_opts[@]}" "$DEMOS_PATH")
+(cd "$build_dir" && cmake -DINTEL_OPENVINO_DIR="$INTEL_OPENVINO_DIR" -DCMAKE_BUILD_TYPE=Release "${extra_cmake_opts[@]}" "$BUILD_PATH")
 cmake --build "$build_dir" -- "$NUM_THREADS"
 
-printf "\nBuild completed, you can find binaries for all demos in the %s subfolder.\n\n" "$build_dir/$OS_PATH/Release"
+printf "\nBuild completed, you can find binaries in the %s subfolder.\n\n" "$build_dir/$OS_PATH/Release"
