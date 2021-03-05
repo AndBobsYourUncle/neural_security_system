@@ -85,6 +85,7 @@ static const char user_message[] = "Required. User for MQTT server.";
 static const char pass_message[] = "Required. Password for MQTT server.";
 
 static const char alive_message[] = "Required. MQTT topic for alive sigal.";
+static const char will_message[] = "Optional. MQTT topic for LWT sigal.";
 
 static const char timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5.";
 
@@ -123,6 +124,7 @@ DEFINE_string(user, "", user_message);
 DEFINE_string(pass, "", pass_message);
 
 DEFINE_string(alive, "", alive_message);
+DEFINE_string(will, "", will_message);
 
 DEFINE_double(to, 5, timeout_message);
 
@@ -190,6 +192,7 @@ static void showUsage() {
     std::cout << "    -user                     " << user_message << std::endl;
     std::cout << "    -pass                     " << pass_message << std::endl;
     std::cout << "    -alive                    " << alive_message << std::endl;
+    std::cout << "    -will                     " << alive_message << std::endl;
     std::cout << "    -to                       " << timeout_message << std::endl;
     std::cout << "    -cr                       " << crop_right_message << std::endl;
     std::cout << "    -cb                       " << crop_bottom_message << std::endl;
@@ -359,9 +362,11 @@ int main(int argc, char *argv[]) {
 
         mqtt::connect_options connOpts;
 
-        mqtt::message willmsg("cameras/lwt", "unexpected exit", 1, true);
-        mqtt::will_options will(willmsg);
-        connOpts.set_will(will);
+        if(FLAGS_will != "") {
+            mqtt::message willmsg(FLAGS_will, "unexpected exit", 1, true);
+            mqtt::will_options will(willmsg);
+            connOpts.set_will(will);
+        }
 
         connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
         connOpts.set_clean_session(true);
