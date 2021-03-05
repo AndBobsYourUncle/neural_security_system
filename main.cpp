@@ -87,6 +87,7 @@ static const char pass_message[] = "Required. Password for MQTT server.";
 static const char alive_message[] = "Required. MQTT topic for alive sigal.";
 static const char will_message[] = "Optional. MQTT topic for LWT sigal.";
 
+static const char detection_window_message[] = "Optional. Minimum human frames to trigger detection. Default is 5.";
 static const char timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5.";
 
 static const char mqtt_topic_message[] = "Required. Specify an MQTT topic.";
@@ -125,6 +126,8 @@ DEFINE_string(pass, "", pass_message);
 
 DEFINE_string(alive, "", alive_message);
 DEFINE_string(will, "", will_message);
+
+DEFINE_double(dw, 5, detection_window_message);
 
 DEFINE_double(to, 5, timeout_message);
 
@@ -193,6 +196,7 @@ static void showUsage() {
     std::cout << "    -pass                     " << pass_message << std::endl;
     std::cout << "    -alive                    " << alive_message << std::endl;
     std::cout << "    -will                     " << alive_message << std::endl;
+    std::cout << "    -dw                       " << detection_window_message << std::endl;
     std::cout << "    -to                       " << timeout_message << std::endl;
     std::cout << "    -cr                       " << crop_right_message << std::endl;
     std::cout << "    -cb                       " << crop_bottom_message << std::endl;
@@ -426,8 +430,10 @@ int main(int argc, char *argv[]) {
 
         uint cameraIndex = 0;
 
+        uint humanDetectedFrames[numCameras];
         std::chrono::time_point<std::chrono::high_resolution_clock> timeHumansDetected[numCameras];
         bool humansDetected[numCameras];
+        bool humansNotified[numCameras];
 
         // Create a topic object. This is a conventience since we will
         // repeatedly publish messages with the same parameters.
@@ -523,20 +529,30 @@ int main(int argc, char *argv[]) {
 
                 if(hasPeopleInFrame && !humansDetected[resultCameraIndex]) {
                     humansDetected[resultCameraIndex] = true;
-                    currentTopic.publish(std::move("ON"));
+                    humanDetectedFrames[resultCameraIndex] = 0;
                 }
 
                 if(hasPeopleInFrame) {
                     timeHumansDetected[resultCameraIndex] = std::chrono::high_resolution_clock::now();
+
+                    if(!humansNotified[resultCameraIndex]) {
+                        humanDetectedFrames[resultCameraIndex]++;
+
+                        if(humanDetectedFrames[resultCameraIndex] >= FLAGS_dw) {
+                            humansNotified[resultCameraIndex] = true;
+                            currentTopic.publish(std::move("ON"));
+                        }
+                    }
                 }
 
                 if(!hasPeopleInFrame && humansDetected[resultCameraIndex]) {
                     auto timeNoHumans = std::chrono::high_resolution_clock::now();
 
-                     std::chrono::milliseconds time_since_humans = std::chrono::duration_cast<std::chrono::milliseconds>(timeNoHumans - timeHumansDetected[resultCameraIndex]);
+                     std::chrono::milliseconds timeSinceHumans = std::chrono::duration_cast<std::chrono::milliseconds>(timeNoHumans - timeHumansDetected[resultCameraIndex]);
 
-                    if(time_since_humans.count() > (FLAGS_to * 1000)) {
+                    if(timeSinceHumans.count() > (FLAGS_to * 1000)) {
                         humansDetected[resultCameraIndex] = false;
+                        humansNotified[resultCameraIndex] = false;
                         currentTopic.publish(std::move("OFF"));
                     }
                 }
