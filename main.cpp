@@ -84,6 +84,8 @@ static const char host_message[] = "Required. Host for MQTT server.";
 static const char user_message[] = "Required. User for MQTT server.";
 static const char pass_message[] = "Required. Password for MQTT server.";
 
+static const char alive_message[] = "Required. MQTT topic for alive sigal.";
+
 static const char timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5.";
 
 static const char mqtt_topic_message[] = "Required. Specify an MQTT topic.";
@@ -119,6 +121,8 @@ DEFINE_bool(yolo_af, false, yolo_af_message);
 DEFINE_string(host, "", host_message);
 DEFINE_string(user, "", user_message);
 DEFINE_string(pass, "", pass_message);
+
+DEFINE_string(alive, "", alive_message);
 
 DEFINE_double(to, 5, timeout_message);
 
@@ -185,6 +189,7 @@ static void showUsage() {
     std::cout << "    -host                     " << host_message << std::endl;
     std::cout << "    -user                     " << user_message << std::endl;
     std::cout << "    -pass                     " << pass_message << std::endl;
+    std::cout << "    -alive                    " << alive_message << std::endl;
     std::cout << "    -to                       " << timeout_message << std::endl;
     std::cout << "    -cr                       " << crop_right_message << std::endl;
     std::cout << "    -cb                       " << crop_bottom_message << std::endl;
@@ -203,6 +208,22 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
         return false;
     }
     slog::info << "Parsing input parameters" << slog::endl;
+
+    if (FLAGS_host.empty()) {
+        throw std::logic_error("Parameter -host is not set");
+    }
+
+    if (FLAGS_user.empty()) {
+        throw std::logic_error("Parameter -user is not set");
+    }
+
+    if (FLAGS_pass.empty()) {
+        throw std::logic_error("Parameter -pass is not set");
+    }
+
+    if (FLAGS_alive.empty()) {
+        throw std::logic_error("Parameter -alive is not set");
+    }
 
     if (FLAGS_i.empty() && FLAGS_cameras.empty()) {
         throw std::logic_error("Parameter -i is not set");
@@ -337,6 +358,11 @@ int main(int argc, char *argv[]) {
         mqtt::async_client cli(address, "");
 
         mqtt::connect_options connOpts;
+
+        mqtt::message willmsg("cameras/lwt", "unexpected exit", 1, true);
+        mqtt::will_options will(willmsg);
+        connOpts.set_will(will);
+
         connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
         connOpts.set_clean_session(true);
         connOpts.set_automatic_reconnect(true);
@@ -347,6 +373,12 @@ int main(int argc, char *argv[]) {
         std::cout << "Connecting to server '" << address << "'..." << std::flush;
         cli.connect(connOpts)->wait();
         std::cout << "OK\n" << std::endl;
+
+        // Initial publish for "off"
+        mqtt::topic::ptr_t aliveTopic;
+        aliveTopic = mqtt::topic::create(cli, FLAGS_alive, QOS, true);
+        mqtt::topic current_topic(*aliveTopic);
+        current_topic.publish(std::move("OFF"));
 
         //------------------------------- Preparing Input ------------------------------------------------------
         slog::info << "Reading input" << slog::endl;
@@ -408,6 +440,9 @@ int main(int argc, char *argv[]) {
 
         std::cout << "To close the application, press 'CTRL+C' here or switch to the output window and press ESC key" << std::endl;
 
+        bool aliveSignalSent = false;
+        bool allCamerasStarted = false;
+
         while (!exitGracefully) {
             if (pipeline.isReadyToProcess()) {
                 //--- Capturing frame. If previous frame hasn't been inferred yet, reuse it instead of capturing new one
@@ -423,8 +458,20 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                frameNum = pipeline.submitData(ImageInputData(curr_frame),
-                    std::make_shared<CustomImageMetaData>(curr_frame, startTime, cameraIndex));
+                cv::Size imageSize = curr_frame.size();
+
+                double cropWidth = imageSize.width - camerasCR[cameraIndex] - camerasCL[cameraIndex];
+                double cropHeight = imageSize.height - camerasCT[cameraIndex] - camerasCB[cameraIndex];
+
+                // Setup a rectangle to define your region of interest
+                cv::Rect myROI(camerasCL[cameraIndex], camerasCT[cameraIndex], cropWidth, cropHeight);
+
+                // Crop the full image to that image contained by the rectangle myROI
+                // Note that this doesn't copy the data
+                cv::Mat croppedFrame(curr_frame, myROI);
+
+                frameNum = pipeline.submitData(ImageInputData(croppedFrame),
+                    std::make_shared<CustomImageMetaData>(croppedFrame, startTime, cameraIndex));
             }
 
             //--- Waiting for free input slot or output data available. Function will return immediately if any of them are available.
@@ -493,7 +540,15 @@ int main(int argc, char *argv[]) {
             cameraIndex++;
 
             if(cameraIndex >= numCameras) {
+                allCamerasStarted = true;
                 cameraIndex = 0;
+            }
+
+            if(allCamerasStarted && !aliveSignalSent) {
+                mqtt::topic current_topic(*aliveTopic);
+                current_topic.publish(std::move("ON"));
+
+                aliveSignalSent = true;
             }
         }
 
@@ -526,6 +581,9 @@ int main(int argc, char *argv[]) {
         }
 
         slog::info << presenter.reportMeans() << slog::endl;
+
+        mqtt::topic notAliveTopic(*aliveTopic);
+        notAliveTopic.publish(std::move("OFF"));
     }
     catch (const std::exception& error) {
         slog::err << "[ ERROR ] " << error.what() << slog::endl;
