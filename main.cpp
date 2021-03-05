@@ -87,7 +87,7 @@ static const char pass_message[] = "Required. Password for MQTT server.";
 static const char alive_message[] = "Required. MQTT topic for alive sigal.";
 static const char will_message[] = "Optional. MQTT topic for LWT sigal.";
 
-static const char detection_window_message[] = "Optional. Minimum human frames to trigger detection. Default is 5.";
+static const char detection_window_message[] = "Optional. Minimum human frames to trigger detection. Default is 10.";
 static const char timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5.";
 
 static const char mqtt_topic_message[] = "Required. Specify an MQTT topic.";
@@ -127,7 +127,7 @@ DEFINE_string(pass, "", pass_message);
 DEFINE_string(alive, "", alive_message);
 DEFINE_string(will, "", will_message);
 
-DEFINE_double(dw, 5, detection_window_message);
+DEFINE_double(dw, 10, detection_window_message);
 
 DEFINE_double(to, 5, timeout_message);
 
