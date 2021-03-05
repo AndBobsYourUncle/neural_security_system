@@ -15,9 +15,8 @@
 */
 
 /**
-* \brief The entry point for the Inference Engine object_detection_demo_ssd_async demo application
-* \file object_detection_demo_ssd_async/main.cpp
-* \example object_detection_demo_ssd_async/main.cpp
+* \brief The entry point for the neural securty system application. Created based on the
+* OpenVINO Open Model Zoo object_detection_demo_ssd_async application.
 */
 
 #include <iostream>
@@ -44,6 +43,7 @@
 #include "models/detection_model_ssd.h"
 
 #include "mqtt/async_client.h"
+#include "yaml-cpp/yaml.h"
 
 const int QOS = 1;
 
@@ -51,7 +51,7 @@ const auto PERIOD = std::chrono::seconds(5);
 
 const int MAX_BUFFERED_MSGS = 120;  // 120 * 5sec => 10min off-line buffering
 
-const std::string PERSIST_DIR { "./persist" };
+const std::string PERSIST_DIR { "data-persist" };
 
 static const char help_message[] = "Print a usage message.";
 static const char at_message[] = "Required. Architecture type: ssd or yolo";
@@ -59,7 +59,7 @@ static const char video_message[] = "Required. Path to a video file (specify \"c
 static const char model_message[] = "Required. Path to an .xml file with a trained model.";
 static const char target_device_message[] = "Optional. Specify the target device to infer on (the list of available devices is shown below). "
 "Default value is CPU. Use \"-d HETERO:<comma-separated_devices_list>\" format to specify HETERO plugin. "
-"The demo will look for a suitable plugin for a specified device.";
+"The application will look for a suitable plugin for a specified device.";
 static const char labels_message[] = "Optional. Path to a file with labels mapping.";
 static const char performance_counter_message[] = "Optional. Enables per-layer performance report.";
 static const char custom_cldnn_message[] = "Required for GPU custom kernels. "
@@ -79,6 +79,21 @@ static const char utilization_monitors_message[] = "Optional. List of monitors t
 static const char iou_thresh_output_message[] = "Optional. Filtering intersection over union threshold for overlapping boxes (YOLOv3 only).";
 static const char yolo_af_message[] = "Optional. Use advanced postprocessing/filtering algorithm for YOLO.";
 
+static const char host_message[] = "Required. Host for MQTT server.";
+static const char user_message[] = "Required. User for MQTT server.";
+static const char pass_message[] = "Required. Password for MQTT server.";
+
+static const char timeout_message[] = "Optional. Seconds between no people detected and MQTT publish. Default is 5.";
+
+static const char mqtt_topic_message[] = "Required. Specify an MQTT topic.";
+
+static const char crop_right_message[] = "Optional. Number of pixels to crop from the right.";
+static const char crop_bottom_message[] = "Optional. Number of pixels to crop from the bottom.";
+static const char crop_left_message[] = "Optional. Number of pixels to crop from the left.";
+static const char crop_top_message[] = "Optional. Number of pixels to crop from the top.";
+
+static const char cameras_message[] = "Required. Specify path to camera YAML config.";
+
 DEFINE_bool(h, false, help_message);
 DEFINE_string(at, "", at_message);
 DEFINE_string(i, "", video_message);
@@ -89,7 +104,7 @@ DEFINE_bool(pc, false, performance_counter_message);
 DEFINE_string(c, "", custom_cldnn_message);
 DEFINE_string(l, "", custom_cpu_library_message);
 DEFINE_bool(r, false, raw_output_message);
-DEFINE_double(t, 0.5, thresh_output_message);
+DEFINE_double(t, 0.7, thresh_output_message);
 DEFINE_double(iou_t, 0.4, iou_thresh_output_message);
 DEFINE_bool(auto_resize, false, input_resizable_message);
 DEFINE_uint32(nireq, 2, num_inf_req_message);
@@ -100,12 +115,42 @@ DEFINE_bool(no_show, false, no_show_processed_video);
 DEFINE_string(u, "", utilization_monitors_message);
 DEFINE_bool(yolo_af, false, yolo_af_message);
 
+DEFINE_string(host, "", host_message);
+DEFINE_string(user, "", user_message);
+DEFINE_string(pass, "", pass_message);
+
+DEFINE_double(to, 5, timeout_message);
+
+DEFINE_string(tp, "", mqtt_topic_message);
+
+DEFINE_double(cr, 0, crop_right_message);
+DEFINE_double(cb, 0, crop_bottom_message);
+DEFINE_double(cl, 0, crop_left_message);
+DEFINE_double(ct, 0, crop_top_message);
+
+DEFINE_string(cameras, "", cameras_message);
+
+struct CustomImageMetaData : public MetaData {
+    cv::Mat img;
+    std::chrono::steady_clock::time_point timeStamp;
+    uint cameraIndex;
+
+    CustomImageMetaData() {
+    }
+
+    CustomImageMetaData(cv::Mat img, std::chrono::steady_clock::time_point timeStamp, uint cameraIndex):
+        img(img),
+        timeStamp(timeStamp),
+        cameraIndex(cameraIndex) {
+    }
+};
+
 /**
 * \brief This function shows a help message
 */
 static void showUsage() {
     std::cout << std::endl;
-    std::cout << "object_detection_demo [OPTION]" << std::endl;
+    std::cout << "neural_security_system [OPTION]" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << std::endl;
     std::cout << "    -h                        " << help_message << std::endl;
@@ -128,6 +173,15 @@ static void showUsage() {
     std::cout << "    -no_show                  " << no_show_processed_video << std::endl;
     std::cout << "    -u                        " << utilization_monitors_message << std::endl;
     std::cout << "    -yolo_af                  " << yolo_af_message << std::endl;
+    std::cout << "    -host                     " << host_message << std::endl;
+    std::cout << "    -user                     " << user_message << std::endl;
+    std::cout << "    -pass                     " << pass_message << std::endl;
+    std::cout << "    -to                       " << timeout_message << std::endl;
+    std::cout << "    -cr                       " << crop_right_message << std::endl;
+    std::cout << "    -cb                       " << crop_bottom_message << std::endl;
+    std::cout << "    -cl                       " << crop_left_message << std::endl;
+    std::cout << "    -ct                       " << crop_top_message << std::endl;
+    std::cout << "    -cameras                  " << cameras_message << std::endl;
 }
 
 
@@ -162,7 +216,7 @@ cv::Mat renderDetectionData(const DetectionResult& result) {
         throw std::invalid_argument("Renderer: metadata is null");
     }
 
-    auto outputImg = result.metaData->asRef<ImageMetaData>().img;
+    auto outputImg = result.metaData->asRef<CustomImageMetaData>().img;
 
     if (outputImg.empty()) {
         throw std::invalid_argument("Renderer: image provided in metadata is empty");
@@ -200,22 +254,6 @@ cv::Mat renderDetectionData(const DetectionResult& result) {
 
 int main(int argc, char *argv[]) {
     try {
-        mqtt::async_client cli("tcp://192.168.1.51:1883", "some-client", MAX_BUFFERED_MSGS, PERSIST_DIR);
-
-        mqtt::connect_options connOpts;
-        connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
-        connOpts.set_clean_session(true);
-        connOpts.set_automatic_reconnect(true);
-        connOpts.set_user_name("username");
-        connOpts.set_password("password");
-
-        // Connect to the MQTT broker
-        std::cout << "Connecting to server '" << "mqtt://192.168.1.51" << "'..." << std::flush;
-        cli.connect(connOpts)->wait();
-        std::cout << "OK\n" << std::endl;
-
-        PerformanceMetrics metrics;
-
         slog::info << "InferenceEngine: " << printable(*InferenceEngine::GetInferenceEngineVersion()) << slog::endl;
 
         // ------------------------------ Parsing and validation of input args ---------------------------------
@@ -223,9 +261,90 @@ int main(int argc, char *argv[]) {
             return 0;
         }
 
+        uint numCameras;
+
+        YAML::Node config;
+
+        if(FLAGS_cameras != "") {
+            config = YAML::LoadFile(FLAGS_cameras);
+
+            numCameras = config["cameras"].size();
+        } else {
+            numCameras = 1;
+        }
+
+        std::string cameraNames[numCameras];
+        std::string cameraInputs[numCameras];
+        std::string cameraTopics[numCameras];
+        int camerasCT[numCameras];
+        int camerasCR[numCameras];
+        int camerasCB[numCameras];
+        int camerasCL[numCameras];
+
+        if(FLAGS_cameras != "") {
+            slog::info << "Initialize camera config from yaml: " << FLAGS_cameras << slog::endl << slog::endl;
+
+            const YAML::Node& cameras = config["cameras"];
+
+            for (std::size_t i=0;i<numCameras;i++) {
+                const YAML::Node camera = cameras[i];
+
+                cameraNames[i] = camera["name"].as<std::string>();
+                cameraInputs[i] = camera["input"].as<std::string>();
+                cameraTopics[i] = camera["mqtt_topic"].as<std::string>();
+                camerasCT[i] = camera["crop_top"].as<int>();
+                camerasCR[i] = camera["crop_right"].as<int>();
+                camerasCB[i] = camera["crop_bottom"].as<int>();
+                camerasCL[i] = camera["crop_left"].as<int>();
+
+                slog::info << "Camera " << i << ": " << slog::endl;
+                std::cout << "name: " << camera["name"].as<std::string>() << std::endl;
+                std::cout << "input: " << camera["input"].as<std::string>() << std::endl;
+                std::cout << "mqtt_topic: " << camera["mqtt_topic"].as<std::string>() << std::endl << std::endl;
+            }
+        } else {
+            std::cout << "Initialize camera config from arguments: " << std::endl << std::endl;
+
+            cameraNames[0] = "Camera";
+            cameraInputs[0] = FLAGS_i;
+            cameraTopics[0] = FLAGS_tp;
+            camerasCT[0] = FLAGS_ct;
+            camerasCR[0] = FLAGS_cr;
+            camerasCB[0] = FLAGS_cb;
+            camerasCL[0] = FLAGS_cl;
+
+            std::cout << "name: " << cameraNames[0] << std::endl;
+            std::cout << "input: " << cameraInputs[0] << std::endl;
+            std::cout << "mqtt_topic: " << cameraTopics[0] << std::endl << std::endl;
+        }
+
+        PerformanceMetrics cameraMetrics[numCameras];
+
+        std::string address = FLAGS_host;
+
+        mqtt::async_client cli(address, "");
+
+        mqtt::connect_options connOpts;
+        connOpts.set_keep_alive_interval(MAX_BUFFERED_MSGS * PERIOD);
+        connOpts.set_clean_session(true);
+        connOpts.set_automatic_reconnect(true);
+        connOpts.set_user_name(FLAGS_user);
+        connOpts.set_password(FLAGS_pass);
+
+        // Connect to the MQTT broker
+        std::cout << "Connecting to server '" << address << "'..." << std::flush;
+        cli.connect(connOpts)->wait();
+        std::cout << "OK\n" << std::endl;
+
         //------------------------------- Preparing Input ------------------------------------------------------
         slog::info << "Reading input" << slog::endl;
-        auto cap = openImagesCapture(FLAGS_i, FLAGS_loop);
+
+        std::unique_ptr<ImagesCapture> caps[numCameras];
+
+        for (std::size_t i=0;i<numCameras;i++) {
+            caps[i] = openImagesCapture(cameraInputs[i], FLAGS_loop);
+        }
+
         cv::Mat curr_frame;
 
         //------------------------------ Running Detection routines ----------------------------------------------
@@ -255,11 +374,29 @@ int main(int argc, char *argv[]) {
         int64_t frameNum = -1;
         std::unique_ptr<ResultBase> result;
 
+        bool hasPeopleInFrame = false;
+
+        uint cameraIndex = 0;
+
+        std::chrono::time_point<std::chrono::high_resolution_clock> timeHumansDetected[numCameras];
+        bool humansDetected[numCameras];
+
+        // Create a topic object. This is a conventience since we will
+        // repeatedly publish messages with the same parameters.
+        mqtt::topic::ptr_t topics[numCameras];
+        for (std::size_t i=0;i<numCameras;i++) {
+            topics[i] = mqtt::topic::create(cli, cameraTopics[i], QOS, true);
+
+            // Initial publish for "off"
+            mqtt::topic currentTopic(*topics[i]);
+            currentTopic.publish(std::move("OFF"));
+        }
+
         while (keepRunning) {
             if (pipeline.isReadyToProcess()) {
                 //--- Capturing frame. If previous frame hasn't been inferred yet, reuse it instead of capturing new one
                 auto startTime = std::chrono::steady_clock::now();
-                curr_frame = cap->read();
+                curr_frame = caps[cameraIndex]->read();
                 if (curr_frame.empty()) {
                     if (frameNum == -1) {
                         throw std::logic_error("Can't read an image from the input");
@@ -271,7 +408,7 @@ int main(int argc, char *argv[]) {
                 }
 
                 frameNum = pipeline.submitData(ImageInputData(curr_frame),
-                    std::make_shared<ImageMetaData>(curr_frame, startTime));
+                    std::make_shared<CustomImageMetaData>(curr_frame, startTime, cameraIndex));
             }
 
             //--- Waiting for free input slot or output data available. Function will return immediately if any of them are available.
@@ -282,12 +419,28 @@ int main(int argc, char *argv[]) {
             //    and use your own processing instead of calling renderDetectionData().
             while ((result = pipeline.getResult()) && keepRunning) {
                 cv::Mat outFrame = renderDetectionData(result->asRef<DetectionResult>());
+
+                hasPeopleInFrame = false;
+                for (auto &object : result->asRef<DetectionResult>().objects) {
+                    if (object.confidence < FLAGS_t)
+                        continue;
+
+                    if(object.label == "person")
+                        hasPeopleInFrame = true;
+                }
+
+                uint resultCameraIndex = result->metaData->asRef<CustomImageMetaData>().cameraIndex;
+
                 //--- Showing results and device information
                 presenter.drawGraphs(outFrame);
-                metrics.update(result->metaData->asRef<ImageMetaData>().timeStamp,
+
+                cameraMetrics[resultCameraIndex].update(result->metaData->asRef<CustomImageMetaData>().timeStamp,
                     outFrame, { 10,22 }, 0.65);
+
+                // metrics.update(result->metaData->asRef<CustomImageMetaData>().timeStamp,
+                //     outFrame, { 10,22 }, 0.65);
                 if (!FLAGS_no_show) {
-                    cv::imshow("Detection Results", outFrame);
+                    cv::imshow(cameraNames[resultCameraIndex], outFrame);
                     //--- Processing keyboard events
                     int key = cv::waitKey(1);
                     if (27 == key || 'q' == key || 'Q' == key) {  // Esc
@@ -297,6 +450,34 @@ int main(int argc, char *argv[]) {
                         presenter.handleKey(key);
                     }
                 }
+
+                mqtt::topic currentTopic(*topics[resultCameraIndex]);
+
+                if(hasPeopleInFrame && !humansDetected[resultCameraIndex]) {
+                    humansDetected[resultCameraIndex] = true;
+                    currentTopic.publish(std::move("ON"));
+                }
+
+                if(hasPeopleInFrame) {
+                    timeHumansDetected[resultCameraIndex] = std::chrono::high_resolution_clock::now();
+                }
+
+                if(!hasPeopleInFrame && humansDetected[resultCameraIndex]) {
+                    auto timeNoHumans = std::chrono::high_resolution_clock::now();
+
+                     std::chrono::milliseconds time_since_humans = std::chrono::duration_cast<std::chrono::milliseconds>(timeNoHumans - timeHumansDetected[resultCameraIndex]);
+
+                    if(time_since_humans.count() > (FLAGS_to * 1000)) {
+                        humansDetected[resultCameraIndex] = false;
+                        currentTopic.publish(std::move("OFF"));
+                    }
+                }
+            }
+
+            cameraIndex++;
+
+            if(cameraIndex >= numCameras) {
+                cameraIndex = 0;
             }
         }
 
@@ -304,12 +485,15 @@ int main(int argc, char *argv[]) {
         pipeline.waitForTotalCompletion();
         while (result = pipeline.getResult()) {
             cv::Mat outFrame = renderDetectionData(result->asRef<DetectionResult>());
+
+            uint resultCameraIndex = result->metaData->asRef<CustomImageMetaData>().cameraIndex;
+
             //--- Showing results and device information
             presenter.drawGraphs(outFrame);
-            metrics.update(result->metaData->asRef<ImageMetaData>().timeStamp,
+            cameraMetrics[resultCameraIndex].update(result->metaData->asRef<CustomImageMetaData>().timeStamp,
                 outFrame, { 10, 22 }, 0.65);
             if (!FLAGS_no_show) {
-                cv::imshow("Detection Results", outFrame);
+                cv::imshow(cameraNames[resultCameraIndex], outFrame);
                 //--- Updating output window
                 cv::waitKey(1);
             }
@@ -317,7 +501,13 @@ int main(int argc, char *argv[]) {
 
         //// --------------------------- Report metrics -------------------------------------------------------
         slog::info << slog::endl << "Metric reports:" << slog::endl;
-        metrics.printTotal();
+        for (std::size_t i=0;i<numCameras;i++) {
+            std::cout << cameraNames[i] << ":" << std::endl;
+
+            cameraMetrics[i].printTotal();
+
+            std::cout << std::endl;
+        }
 
         slog::info << presenter.reportMeans() << slog::endl;
     }

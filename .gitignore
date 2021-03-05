@@ -4,3 +4,4 @@ neural_security_system
 cameras.yaml
 build/
 public/
+persist/

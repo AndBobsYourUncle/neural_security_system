@@ -82,8 +82,6 @@ set (HAVE_INTTYPES_H 1)
 
 add_subdirectory(${INTEL_OPENVINO_DIR}/deployment_tools/open_model_zoo/demos/thirdparty/gflags libs/thirdparty/gflags)
 
-# add_subdirectory(/home/nicholas/paho.mqtt.cpp libs/mqtt)
-
 if (${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall")
 endif()
@@ -144,12 +142,9 @@ macro(is_add_project)
         target_link_libraries(${IE_PROJECT_NAME} PRIVATE pthread)
     endif()
 
-    # target_link_libraries(${IE_PROJECT_NAME} PRIVATE paho-mqtt3a)
-    # target_link_libraries(${IE_PROJECT_NAME} PRIVATE paho-mqttpp3)
-    # # target_link_libraries(${IE_PROJECT_NAME} PRIVATE ${PahoMqttC_LIBRARIES})
-    # find_package(PahoMqttCpp REQUIRED)
-
     target_link_libraries(${IE_PROJECT_NAME} PRIVATE PahoMqttCpp::paho-mqttpp3)
+
+    target_link_libraries(${IE_PROJECT_NAME} PRIVATE yaml-cpp)
 
     # create global target with all projects
     if(NOT TARGET ie_projects)
@@ -175,22 +170,9 @@ endif()
 
 find_package(ngraph REQUIRED)
 
-# enable_cxx_compiler_flag_if_supported("-O2")
-# enable_cxx_compiler_flag_if_supported("D_NDEBUG")
-
 find_package(OpenSSL REQUIRED)
 find_package(PahoMqttCpp REQUIRED)
-
-# find_package(PahoMqttCpp REQUIRED)
-
-# find_library(paho-mqttpp3 NAMES libpaho-mqttpp3.a REQUIRED)
-# find_library(paho-mqtt3a NAMES libpaho-mqtt3a.so REQUIRED)
-
-# add_library(pahottpp STATIC IMPORTED)
-# set_target_properties(pahottpp PROPERTIES IMPORTED_LOCATION ${paho-mqttpp3})
-
-# add_library(pahomqtt3a SHARED IMPORTED)
-# set_property(TARGET pahomqtt3a PROPERTY IMPORTED_LOCATION ${paho-mqtt3a})
+find_package(yaml-cpp REQUIRED)
 
 FILE(GLOB SRC_FILES ./*.cpp)
 FILE(GLOB H_FILES ./*.h)
