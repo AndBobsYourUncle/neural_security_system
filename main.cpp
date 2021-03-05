@@ -42,6 +42,7 @@
 #include "models/detection_model_yolo.h"
 #include "models/detection_model_ssd.h"
 
+#include <csignal>
 #include "mqtt/async_client.h"
 #include "yaml-cpp/yaml.h"
 
@@ -145,6 +146,14 @@ struct CustomImageMetaData : public MetaData {
     }
 };
 
+bool exitGracefully = false;
+
+void signalHandler(int signum) {
+   std::cout << "Interrupt signal (" << signum << ") received. Exiting gracefully...\n";
+
+   exitGracefully = true;
+}
+
 /**
 * \brief This function shows a help message
 */
@@ -195,7 +204,7 @@ bool ParseAndCheckCommandLine(int argc, char *argv[]) {
     }
     slog::info << "Parsing input parameters" << slog::endl;
 
-    if (FLAGS_i.empty()) {
+    if (FLAGS_i.empty() && FLAGS_cameras.empty()) {
         throw std::logic_error("Parameter -i is not set");
     }
 
@@ -253,6 +262,9 @@ cv::Mat renderDetectionData(const DetectionResult& result) {
 
 
 int main(int argc, char *argv[]) {
+    signal(SIGINT, signalHandler);
+    signal(SIGTERM, signalHandler);
+
     try {
         slog::info << "InferenceEngine: " << printable(*InferenceEngine::GetInferenceEngineVersion()) << slog::endl;
 
@@ -370,7 +382,6 @@ int main(int argc, char *argv[]) {
             core);
         Presenter presenter;
 
-        bool keepRunning = true;
         int64_t frameNum = -1;
         std::unique_ptr<ResultBase> result;
 
@@ -392,7 +403,12 @@ int main(int argc, char *argv[]) {
             currentTopic.publish(std::move("OFF"));
         }
 
-        while (keepRunning) {
+        // --------------------------- 6. Doing inference ------------------------------------------------------
+        slog::info << "Start inference " << slog::endl;
+
+        std::cout << "To close the application, press 'CTRL+C' here or switch to the output window and press ESC key" << std::endl;
+
+        while (!exitGracefully) {
             if (pipeline.isReadyToProcess()) {
                 //--- Capturing frame. If previous frame hasn't been inferred yet, reuse it instead of capturing new one
                 auto startTime = std::chrono::steady_clock::now();
@@ -417,7 +433,7 @@ int main(int argc, char *argv[]) {
             //--- Checking for results and rendering data if it's ready
             //--- If you need just plain data without rendering - cast result's underlying pointer to DetectionResult*
             //    and use your own processing instead of calling renderDetectionData().
-            while ((result = pipeline.getResult()) && keepRunning) {
+            while ((result = pipeline.getResult()) && !exitGracefully) {
                 cv::Mat outFrame = renderDetectionData(result->asRef<DetectionResult>());
 
                 hasPeopleInFrame = false;
@@ -444,7 +460,7 @@ int main(int argc, char *argv[]) {
                     //--- Processing keyboard events
                     int key = cv::waitKey(1);
                     if (27 == key || 'q' == key || 'Q' == key) {  // Esc
-                        keepRunning = false;
+                        exitGracefully = true;
                     }
                     else {
                         presenter.handleKey(key);
