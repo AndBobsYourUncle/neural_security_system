@@ -1,7 +1,7 @@
 FROM ubuntu:18.04
 ENV http_proxy $HTTP_PROXY
 ENV https_proxy $HTTPS_PROXY
-ARG DOWNLOAD_LINK=http://registrationcenter-download.intel.com/akdlm/irc_nas/16345/l_openvino_toolkit_p_2020.1.023.tgz
+ARG DOWNLOAD_LINK=https://registrationcenter-download.intel.com/akdlm/irc_nas/17504/l_openvino_toolkit_p_2021.2.185.tgz
 ARG INSTALL_DIR=/opt/intel/openvino
 ARG TEMP_DIR=/tmp/openvino_installer
 RUN apt-get update && apt-get install -y --no-install-recommends \

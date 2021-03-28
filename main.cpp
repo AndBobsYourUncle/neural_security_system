@@ -426,24 +426,38 @@ int main(int argc, char *argv[]) {
         int64_t frameNum = -1;
         std::unique_ptr<ResultBase> result;
 
-        bool hasPeopleInFrame = false;
+        // bool hasPeopleInFrame = false;
 
         uint cameraIndex = 0;
 
-        uint humanDetectedFrames[numCameras];
-        std::chrono::time_point<std::chrono::high_resolution_clock> timeHumansDetected[numCameras];
-        bool humansDetected[numCameras];
-        bool humansNotified[numCameras];
+        // uint humanDetectedFrames[numCameras];
+        // std::chrono::time_point<std::chrono::high_resolution_clock> timeHumansDetected[numCameras];
+        // bool humansDetected[numCameras];
+        // bool humansNotified[numCameras];
 
         // Create a topic object. This is a conventience since we will
         // repeatedly publish messages with the same parameters.
-        mqtt::topic::ptr_t topics[numCameras];
-        for (std::size_t i=0;i<numCameras;i++) {
-            topics[i] = mqtt::topic::create(cli, cameraTopics[i], QOS, true);
+        // mqtt::topic::ptr_t topics[numCameras];
+        float lastConfidence[numCameras];
+        float lastArea[numCameras];
 
-            // Initial publish for "off"
-            mqtt::topic currentTopic(*topics[i]);
-            currentTopic.publish(std::move("OFF"));
+        mqtt::topic::ptr_t confidenceTopics[numCameras];
+        mqtt::topic::ptr_t areaTopics[numCameras];
+        for (std::size_t i=0;i<numCameras;i++) {
+            lastConfidence[i] = 0;
+            lastArea[i] = 0;
+
+            confidenceTopics[i] = mqtt::topic::create(cli, cameraTopics[i] + "/confidence", QOS, true);
+
+            // Initial publish for no confidence detected
+            mqtt::topic confidenceTopic(*confidenceTopics[i]);
+            confidenceTopic.publish(std::move("0"));
+
+            areaTopics[i] = mqtt::topic::create(cli, cameraTopics[i] + "/area", QOS, true);
+
+            // Initial publish for no person area detected
+            mqtt::topic areaTopic(*areaTopics[i]);
+            areaTopic.publish(std::move("0"));
         }
 
         // --------------------------- 6. Doing inference ------------------------------------------------------
@@ -494,16 +508,40 @@ int main(int argc, char *argv[]) {
             while ((result = pipeline.getResult()) && !exitGracefully) {
                 cv::Mat outFrame = renderDetectionData(result->asRef<DetectionResult>());
 
-                hasPeopleInFrame = false;
-                for (auto &object : result->asRef<DetectionResult>().objects) {
-                    if (object.confidence < FLAGS_t)
-                        continue;
+                float highestConfidence = 0;
+                float highestArea = 0;
 
-                    if(object.label == "person")
-                        hasPeopleInFrame = true;
+                // hasPeopleInFrame = false;
+                for (auto &object : result->asRef<DetectionResult>().objects) {
+                    // if (object.confidence < FLAGS_t)
+                    //     continue;
+
+                    if(object.label == "person") {
+                        if(object.confidence > highestConfidence)
+                            highestConfidence = object.confidence;
+
+                        float currentArea = object.width * object.height;
+
+                        if(currentArea > highestArea)
+                            highestArea = currentArea;
+                    }
                 }
 
                 uint resultCameraIndex = result->metaData->asRef<CustomImageMetaData>().cameraIndex;
+
+                if(lastConfidence[resultCameraIndex] != highestConfidence) {
+                    lastConfidence[resultCameraIndex] = highestConfidence;
+
+                    mqtt::topic confidenceTopic(*confidenceTopics[resultCameraIndex]);
+                    confidenceTopic.publish(std::move(std::to_string(highestConfidence)));
+                }
+
+                if(lastArea[resultCameraIndex] != highestArea) {
+                    lastArea[resultCameraIndex] = highestArea;
+
+                    mqtt::topic areaTopic(*areaTopics[resultCameraIndex]);
+                    areaTopic.publish(std::move(std::to_string(highestArea)));
+                }
 
                 //--- Showing results and device information
                 presenter.drawGraphs(outFrame);
@@ -525,37 +563,37 @@ int main(int argc, char *argv[]) {
                     }
                 }
 
-                mqtt::topic currentTopic(*topics[resultCameraIndex]);
+                // mqtt::topic currentTopic(*topics[resultCameraIndex]);
 
-                if(hasPeopleInFrame && !humansDetected[resultCameraIndex]) {
-                    humansDetected[resultCameraIndex] = true;
-                    humanDetectedFrames[resultCameraIndex] = 0;
-                }
+                // if(hasPeopleInFrame && !humansDetected[resultCameraIndex]) {
+                //     humansDetected[resultCameraIndex] = true;
+                //     humanDetectedFrames[resultCameraIndex] = 0;
+                // }
 
-                if(hasPeopleInFrame) {
-                    timeHumansDetected[resultCameraIndex] = std::chrono::high_resolution_clock::now();
+                // if(hasPeopleInFrame) {
+                //     timeHumansDetected[resultCameraIndex] = std::chrono::high_resolution_clock::now();
 
-                    if(!humansNotified[resultCameraIndex]) {
-                        humanDetectedFrames[resultCameraIndex]++;
+                //     if(!humansNotified[resultCameraIndex]) {
+                //         humanDetectedFrames[resultCameraIndex]++;
 
-                        if(humanDetectedFrames[resultCameraIndex] >= FLAGS_dw) {
-                            humansNotified[resultCameraIndex] = true;
-                            currentTopic.publish(std::move("ON"));
-                        }
-                    }
-                }
+                //         if(humanDetectedFrames[resultCameraIndex] >= FLAGS_dw) {
+                //             humansNotified[resultCameraIndex] = true;
+                //             currentTopic.publish(std::move("ON"));
+                //         }
+                //     }
+                // }
 
-                if(!hasPeopleInFrame && humansDetected[resultCameraIndex]) {
-                    auto timeNoHumans = std::chrono::high_resolution_clock::now();
+                // if(!hasPeopleInFrame && humansDetected[resultCameraIndex]) {
+                //     auto timeNoHumans = std::chrono::high_resolution_clock::now();
 
-                     std::chrono::milliseconds timeSinceHumans = std::chrono::duration_cast<std::chrono::milliseconds>(timeNoHumans - timeHumansDetected[resultCameraIndex]);
+                //      std::chrono::milliseconds timeSinceHumans = std::chrono::duration_cast<std::chrono::milliseconds>(timeNoHumans - timeHumansDetected[resultCameraIndex]);
 
-                    if(timeSinceHumans.count() > (FLAGS_to * 1000)) {
-                        humansDetected[resultCameraIndex] = false;
-                        humansNotified[resultCameraIndex] = false;
-                        currentTopic.publish(std::move("OFF"));
-                    }
-                }
+                //     if(timeSinceHumans.count() > (FLAGS_to * 1000)) {
+                //         humansDetected[resultCameraIndex] = false;
+                //         humansNotified[resultCameraIndex] = false;
+                //         currentTopic.publish(std::move("OFF"));
+                //     }
+                // }
             }
 
             cameraIndex++;
